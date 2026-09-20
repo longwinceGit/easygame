@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+
+    <!-- 暗色主题复用同一套色板（values-night/colors.xml 已覆盖 @color/* 的取值），
+         仅覆盖状态栏相关的窗口属性。 -->
+    <style name="Theme.Template" parent="Theme.Template.Base">
+        <item name="android:statusBarColor">@color/background</item>
+        <item name="android:windowLightStatusBar">false</item>
+    </style>
+
+</resources>

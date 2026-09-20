@@ -1,0 +1,44 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+
+    <!-- ================================================================ -->
+    <!-- 游戏画布色（浅色主题）                                            -->
+    <!-- 全部取自 docs/04-ui-spec.md 第 2 节，禁止在 Java 中硬编码色值     -->
+    <!-- ================================================================ -->
+
+    <color name="game_board_bg">#F5F5F5</color>
+    <color name="game_board_grid">#E0E0E0</color>
+    <color name="game_board_frame">#C4C6D0</color>
+
+    <color name="game_ghost_valid">#1565C0</color>
+    <color name="game_ghost_invalid">#BA1A1A</color>
+    <color name="game_column_hint">#D1E4FF</color>
+
+    <color name="game_tray_slot">#F5F5F5</color>
+    <color name="game_tray_slot_empty">#C4C6D0</color>
+
+    <color name="game_flash">#FFFFFF</color>
+    <color name="game_dim">#1C1B1A</color>
+
+    <!-- 琥珀块对比度补偿描边（UI 规格 2.1） -->
+    <color name="game_piece_stroke_amber">#795500</color>
+
+    <!-- ================================================================ -->
+    <!-- 每款游戏的主题色                                                  -->
+    <!-- ================================================================ -->
+    <color name="game_tetris_accent">#00838F</color>
+
+    <!-- ================================================================ -->
+    <!-- 方块调色板：下标 = TetrominoType.ordinal()                        -->
+    <!-- ================================================================ -->
+    <integer-array name="tetris_piece_colors">
+        <item>0xFF00A3C4</item> <!-- I 青 -->
+        <item>0xFFF2B705</item> <!-- O 琥珀 -->
+        <item>0xFF8E4EC6</item> <!-- T 紫 -->
+        <item>0xFF3BA55D</item> <!-- S 绿 -->
+        <item>0xFFE5484D</item> <!-- Z 红 -->
+        <item>0xFF2D7FF9</item> <!-- J 蓝 -->
+        <item>0xFFF76808</item> <!-- L 橙 -->
+    </integer-array>
+
+</resources>

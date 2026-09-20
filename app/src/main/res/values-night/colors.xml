@@ -1,0 +1,41 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- 主色调：浅蓝（暗色背景适配） -->
+    <color name="primary">#90CAF9</color>
+    <color name="on_primary">#003258</color>
+    <color name="primary_container">#00497D</color>
+    <color name="on_primary_container">#D1E4FF</color>
+
+    <!-- 辅色：浅蓝灰 -->
+    <color name="secondary">#B0BEC5</color>
+    <color name="on_secondary">#1C313A</color>
+    <color name="secondary_container">#37474F</color>
+    <color name="on_secondary_container">#CFD8DC</color>
+
+    <!-- 强调色：浅琥珀 -->
+    <color name="tertiary">#FFB74D</color>
+    <color name="on_tertiary">#462A00</color>
+    <color name="tertiary_container">#643E00</color>
+    <color name="on_tertiary_container">#FFDCC2</color>
+
+    <!-- 表面/背景：暗色 -->
+    <color name="surface">#1C1B1A</color>
+    <color name="on_surface">#E6E1DD</color>
+    <color name="surface_variant">#2C2C2C</color>
+    <color name="on_surface_variant">#C4C6D0</color>
+
+    <color name="background">#121212</color>
+    <color name="on_background">#E6E1DD</color>
+
+    <color name="error">#FF6B6B</color>
+    <color name="on_error">#1C1B1A</color>
+
+    <color name="outline">#8D8D8D</color>
+    <color name="outline_variant">#49454E</color>
+
+    <color name="divider">#2C2C2C</color>
+
+    <!-- 状态语义色 -->
+    <color name="state_success">#66BB6A</color>
+    <color name="state_error">#FF6B6B</color>
+</resources>

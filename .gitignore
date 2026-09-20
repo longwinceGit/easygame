@@ -1,0 +1,44 @@
+# Gradle files
+.gradle/
+build/
+
+# IDE
+.idea/
+*.iml
+
+# Local configuration file (SDK path)
+local.properties
+
+# Built application files
+*.apk
+*.ap_
+*.aab
+
+# Files for the ART/Dalvik VM
+*.dex
+
+# Java class files
+*.class
+
+# Generated files
+bin/
+gen/
+out/
+
+# Gradle wrapper jar (keep the wrapper properties)
+!gradle/wrapper/gradle-wrapper.jar
+
+# Log Files
+*.log
+
+# Android
+/captures
+
+# Keystore files
+*.jks
+*.keystore
+
+# Code graph / analysis tools
+.codegraph/
+.codebuddy/
+.omo/

@@ -1,0 +1,45 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">游戏合集</string>
+
+    <!-- 底部导航 -->
+    <string name="nav_games">游戏</string>
+    <string name="nav_records">战绩</string>
+
+    <!-- 游戏大厅 -->
+    <string name="hub_title">游戏</string>
+    <string name="hub_empty">暂无可用游戏</string>
+    <string name="hub_empty_hint">新游戏正在路上，敬请期待</string>
+    <string name="game_start">开始</string>
+
+    <!-- 拖拽方块 -->
+    <string name="tetris_title">拖拽方块</string>
+    <string name="tetris_subtitle">拖着放，慢慢想</string>
+    <string name="tetris_label_score">分数</string>
+    <string name="tetris_label_lines">消行</string>
+    <string name="tetris_label_level">等级</string>
+    <string name="tetris_label_best">最高分</string>
+    <string name="tetris_pause">暂停</string>
+    <string name="tetris_resume">继续</string>
+    <string name="tetris_restart">重新开始</string>
+    <string name="tetris_paused">已暂停</string>
+    <string name="tetris_game_over_overlay">游戏结束</string>
+    <string name="tetris_game_over_title">本局结束</string>
+    <string name="tetris_game_over_message">本局 %1$d 分，历史最高 %2$d 分</string>
+    <string name="tetris_play_again">再来一局</string>
+    <string name="tetris_back_to_hub">返回大厅</string>
+    <string name="tetris_hint">按住下方方块，拖到棋盘上松手即可放置；轻点方块可旋转</string>
+    <string name="tetris_popup_lines">%1$d 行</string>
+    <string name="tetris_popup_combo">连击 x%1$d</string>
+    <string name="tetris_popup_tetris">四连消!</string>
+    <string name="tetris_board_description">拖拽方块游戏棋盘，从下方托盘拖出方块放置到棋盘上</string>
+
+    <!-- 战绩 -->
+    <string name="records_best_title">最佳成绩</string>
+    <string name="records_recent_title">最近对局</string>
+    <string name="records_best_empty">还没有成绩记录</string>
+    <string name="records_recent_empty">还没有对局记录，去玩一局吧</string>
+    <string name="records_play_count">%1$d 局</string>
+    <string name="records_meta">%1$d 行 · %2$s</string>
+
+</resources>

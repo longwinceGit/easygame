@@ -1,0 +1,140 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources xmlns:tools="http://schemas.android.com/tools">
+
+    <!-- 主题色板：与具体模式无关，取值由 values(-night)/colors.xml 决定。
+         values-night 中的 Theme.Template 直接继承它，避免重复声明导致色板丢失。 -->
+    <style name="Theme.Template.Base" parent="Theme.Material3.DayNight.NoActionBar">
+        <item name="colorPrimary">@color/primary</item>
+        <item name="colorOnPrimary">@color/on_primary</item>
+        <item name="colorPrimaryContainer">@color/primary_container</item>
+        <item name="colorOnPrimaryContainer">@color/on_primary_container</item>
+        <item name="colorSecondary">@color/secondary</item>
+        <item name="colorOnSecondary">@color/on_secondary</item>
+        <item name="colorSecondaryContainer">@color/secondary_container</item>
+        <item name="colorOnSecondaryContainer">@color/on_secondary_container</item>
+        <item name="colorTertiary">@color/tertiary</item>
+        <item name="colorOnTertiary">@color/on_tertiary</item>
+        <item name="colorTertiaryContainer">@color/tertiary_container</item>
+        <item name="colorOnTertiaryContainer">@color/on_tertiary_container</item>
+        <item name="colorSurface">@color/surface</item>
+        <item name="colorOnSurface">@color/on_surface</item>
+        <item name="colorSurfaceVariant">@color/surface_variant</item>
+        <item name="colorOnSurfaceVariant">@color/on_surface_variant</item>
+        <item name="android:colorBackground">@color/background</item>
+        <item name="colorOnBackground">@color/on_background</item>
+        <item name="colorError">@color/error</item>
+        <item name="colorOnError">@color/on_error</item>
+        <item name="colorOutline">@color/outline</item>
+        <item name="colorOutlineVariant">@color/outline_variant</item>
+    </style>
+
+    <!-- 浅色主题：色板 + 状态栏窗口属性 -->
+    <style name="Theme.Template" parent="Theme.Template.Base">
+        <item name="android:statusBarColor">@color/background</item>
+        <item name="android:navigationBarColor">@color/surface</item>
+        <item name="android:windowLightStatusBar" tools:targetApi="23">true</item>
+    </style>
+
+    <!-- ================================================================ -->
+    <!-- 底部导航样式                                                     -->
+    <!-- ================================================================ -->
+    <style name="Widget.Template.BottomNavigation" parent="Widget.Material3.BottomNavigationView">
+        <item name="materialThemeOverlay">@style/ThemeOverlay.Template.BottomNav</item>
+        <item name="itemActiveIndicatorStyle">@style/Widget.Template.BottomNav.ActiveIndicator</item>
+        <item name="itemIconSize">@dimen/spacing_xxl</item>
+        <item name="labelVisibilityMode">labeled</item>
+    </style>
+
+    <style name="ThemeOverlay.Template.BottomNav" parent="">
+        <item name="colorSurface">@color/bg_card</item>
+        <item name="colorOnSurface">@color/text_title</item>
+        <item name="colorOnSurfaceVariant">@color/text_body_secondary</item>
+    </style>
+
+    <style name="Widget.Template.BottomNav.ActiveIndicator" parent="Widget.Material3.BottomNavigationView.ActiveIndicator">
+        <item name="android:color">@color/primary_container</item>
+        <item name="shapeAppearance">@style/ShapeAppearance.Template.Pill</item>
+    </style>
+
+    <!-- ================================================================ -->
+    <!-- 形状令牌 (ShapeAppearance)                                      -->
+    <!-- ================================================================ -->
+    <style name="ShapeAppearance.Template.Small" parent="">
+        <item name="cornerFamily">rounded</item>
+        <item name="cornerSize">@dimen/radius_small</item>
+    </style>
+
+    <style name="ShapeAppearance.Template.Medium" parent="">
+        <item name="cornerFamily">rounded</item>
+        <item name="cornerSize">@dimen/radius_medium</item>
+    </style>
+
+    <style name="ShapeAppearance.Template.Large" parent="">
+        <item name="cornerFamily">rounded</item>
+        <item name="cornerSize">@dimen/radius_large</item>
+    </style>
+
+    <style name="ShapeAppearance.Template.Pill" parent="">
+        <item name="cornerFamily">rounded</item>
+        <item name="cornerSize">@dimen/radius_xlarge</item>
+    </style>
+
+    <!-- ================================================================ -->
+    <!-- 排版样式 (TextAppearance)                                        -->
+    <!-- ================================================================ -->
+    <style name="TextAppearance.Template.SectionTitle" parent="TextAppearance.Material3.TitleLarge">
+        <item name="android:textSize">@dimen/text_size_title</item>
+        <item name="android:textColor">@color/text_title</item>
+        <item name="android:textStyle">bold</item>
+    </style>
+
+    <style name="TextAppearance.Template.CardTitle" parent="TextAppearance.Material3.TitleMedium">
+        <item name="android:textSize">@dimen/text_size_title_card</item>
+        <item name="android:textColor">@color/text_body</item>
+        <item name="android:textStyle">bold</item>
+    </style>
+
+    <style name="TextAppearance.Template.Body" parent="TextAppearance.Material3.BodyLarge">
+        <item name="android:textSize">@dimen/text_size_body</item>
+        <item name="android:textColor">@color/text_body</item>
+    </style>
+
+    <style name="TextAppearance.Template.BodySecondary" parent="TextAppearance.Material3.BodyMedium">
+        <item name="android:textSize">@dimen/text_size_body_sm</item>
+        <item name="android:textColor">@color/text_body_secondary</item>
+    </style>
+
+    <style name="TextAppearance.Template.Caption" parent="TextAppearance.Material3.LabelMedium">
+        <item name="android:textSize">@dimen/text_size_caption</item>
+        <item name="android:textColor">@color/text_caption</item>
+    </style>
+
+    <style name="TextAppearance.Template.Display" parent="TextAppearance.Material3.DisplaySmall">
+        <item name="android:textSize">@dimen/text_size_display</item>
+        <item name="android:textColor">@color/text_title</item>
+        <item name="android:textStyle">bold</item>
+    </style>
+
+    <!-- ================================================================ -->
+    <!-- 卡片样式 (Card)                                                  -->
+    <!-- ================================================================ -->
+    <style name="Widget.Template.Card" parent="Widget.Material3.CardView.Elevated">
+        <item name="cardBackgroundColor">@color/bg_card</item>
+        <item name="cardElevation">@dimen/elevation_card</item>
+        <item name="cardCornerRadius">@dimen/radius_medium</item>
+        <item name="strokeColor">@color/outline_variant</item>
+        <item name="strokeWidth">@dimen/stroke_thin</item>
+        <item name="contentPadding">@dimen/spacing_card_padding</item>
+    </style>
+
+    <!-- ================================================================ -->
+    <!-- 输入框样式                                                       -->
+    <!-- ================================================================ -->
+    <style name="Widget.Template.TextInput" parent="Widget.Material3.TextInputLayout.OutlinedBox">
+        <item name="boxCornerRadiusBottomEnd">@dimen/radius_small</item>
+        <item name="boxCornerRadiusBottomStart">@dimen/radius_small</item>
+        <item name="boxCornerRadiusTopEnd">@dimen/radius_small</item>
+        <item name="boxCornerRadiusTopStart">@dimen/radius_small</item>
+    </style>
+
+</resources>

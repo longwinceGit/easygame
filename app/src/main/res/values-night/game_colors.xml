@@ -1,0 +1,36 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+
+    <!-- ================================================================ -->
+    <!-- 游戏画布色（暗色主题）                                            -->
+    <!-- ================================================================ -->
+
+    <color name="game_board_bg">#1E1E1E</color>
+    <color name="game_board_grid">#2C2C2C</color>
+    <color name="game_board_frame">#49454E</color>
+
+    <color name="game_ghost_valid">#90CAF9</color>
+    <color name="game_ghost_invalid">#FF6B6B</color>
+    <color name="game_column_hint">#00497D</color>
+
+    <color name="game_tray_slot">#2C2C2C</color>
+    <color name="game_tray_slot_empty">#49454E</color>
+
+    <color name="game_flash">#FFFFFF</color>
+    <color name="game_dim">#000000</color>
+
+    <color name="game_piece_stroke_amber">#8D6E00</color>
+
+    <color name="game_tetris_accent">#4DD0E1</color>
+
+    <integer-array name="tetris_piece_colors">
+        <item>0xFF4DD0E1</item> <!-- I -->
+        <item>0xFFFFD54F</item> <!-- O -->
+        <item>0xFFCE93D8</item> <!-- T -->
+        <item>0xFF66BB6A</item> <!-- S -->
+        <item>0xFFEF5350</item> <!-- Z -->
+        <item>0xFF64B5F6</item> <!-- J -->
+        <item>0xFFFFA726</item> <!-- L -->
+    </integer-array>
+
+</resources>

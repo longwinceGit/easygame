@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="utf-8"?>
+<navigation xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:id="@+id/nav_graph"
+    app:startDestination="@id/nav_hub">
+
+    <!-- 游戏大厅（底部导航 Tab 1） -->
+    <fragment
+        android:id="@+id/nav_hub"
+        android:name="com.template.app.ui.hub.GameHubFragment"
+        android:label="@string/nav_games"
+        tools:layout="@layout/fragment_game_hub" />
+
+    <!-- 战绩（底部导航 Tab 2） -->
+    <fragment
+        android:id="@+id/nav_records"
+        android:name="com.template.app.ui.records.RecordsFragment"
+        android:label="@string/nav_records"
+        tools:layout="@layout/fragment_records" />
+
+    <!-- 拖拽方块：由 GameRegistry 中的 navDestinationRes 指向这里 -->
+    <fragment
+        android:id="@+id/nav_tetris"
+        android:name="com.template.app.game.tetris.ui.TetrisFragment"
+        android:label="@string/tetris_title"
+        tools:layout="@layout/fragment_tetris" />
+
+</navigation>

@@ -1,0 +1,58 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- 主色调：靛蓝 -->
+    <color name="primary">#1565C0</color>
+    <color name="on_primary">#FFFFFF</color>
+    <color name="primary_container">#D1E4FF</color>
+    <color name="on_primary_container">#001D36</color>
+
+    <!-- 辅色：蓝灰 -->
+    <color name="secondary">#546E7A</color>
+    <color name="on_secondary">#FFFFFF</color>
+    <color name="secondary_container">#CFD8DC</color>
+    <color name="on_secondary_container">#0D1F29</color>
+
+    <!-- 强调色：琥珀 -->
+    <color name="tertiary">#E65100</color>
+    <color name="on_tertiary">#FFFFFF</color>
+    <color name="tertiary_container">#FFDCC2</color>
+    <color name="on_tertiary_container">#331400</color>
+
+    <!-- 表面/背景 -->
+    <color name="surface">#FFFBFE</color>
+    <color name="on_surface">#1C1B1A</color>
+    <color name="surface_variant">#F5F5F5</color>
+    <color name="on_surface_variant">#49454E</color>
+
+    <color name="background">#FAFAFA</color>
+    <color name="on_background">#1C1B1A</color>
+
+    <color name="error">#BA1A1A</color>
+    <color name="on_error">#FFFFFF</color>
+
+    <color name="outline">#79747E</color>
+    <color name="outline_variant">#C4C6D0</color>
+
+    <color name="divider">#E0E0E0</color>
+
+    <!-- ================================================================ -->
+    <!-- 语义色令牌 (Semantic Color)                                     -->
+    <!-- ================================================================ -->
+
+    <!-- 文字语义色 -->
+    <color name="text_title">@color/on_surface</color>
+    <color name="text_body">@color/on_surface</color>
+    <color name="text_body_secondary">@color/on_surface_variant</color>
+    <color name="text_caption">@color/outline</color>
+    <color name="text_accent">@color/tertiary</color>
+    <color name="text_on_primary">@color/on_primary</color>
+
+    <!-- 背景语义色 -->
+    <color name="bg_page">@color/background</color>
+    <color name="bg_card">@color/surface</color>
+    <color name="bg_card_elevated">@color/surface_variant</color>
+
+    <!-- 状态语义色 -->
+    <color name="state_success">#2E7D32</color>
+    <color name="state_error">@color/error</color>
+</resources>

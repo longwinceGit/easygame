@@ -1,0 +1,49 @@
+{
+  "pipelineName": "AI 智能体编排流水线",
+  "createdAt": "2026-09-20T02:44:32.257Z",
+  "stepCount": 7,
+  "steps": [
+    {
+      "phase": "分析",
+      "agentId": "product-manager",
+      "agentName": "产品经理",
+      "rationale": "理由: 明确当前拖拽俄罗斯方块MVP范围、用户目标和后续多款游戏扩展需求。"
+    },
+    {
+      "phase": "设计",
+      "agentId": "game-designer",
+      "agentName": "游戏设计师",
+      "rationale": "理由: 设计俄罗斯方块核心玩法、拖拽交互、难度节奏和多游戏扩展框架。"
+    },
+    {
+      "phase": "设计",
+      "agentId": "engineering-software-architect",
+      "agentName": "软件架构师",
+      "rationale": "理由: 设计可扩展的Android游戏应用架构，便于后续接入多款游戏。"
+    },
+    {
+      "phase": "设计",
+      "agentId": "design-ui-designer",
+      "agentName": "UI 设计师",
+      "rationale": "理由: 设计游戏主界面、方块拖拽反馈和一致的移动端视觉体验。"
+    },
+    {
+      "phase": "实现",
+      "agentId": "engineering-mobile-app-builder",
+      "agentName": "移动应用开发者",
+      "rationale": "理由: 实现Android游戏APP及当前可拖拽俄罗斯方块的核心功能。"
+    },
+    {
+      "phase": "审查",
+      "agentId": "engineering-code-reviewer",
+      "agentName": "代码审查员",
+      "rationale": "理由: 审查代码正确性、性能、可维护性和多游戏扩展设计质量。"
+    },
+    {
+      "phase": "文档",
+      "agentId": "engineering-technical-writer",
+      "agentName": "技术文档工程师",
+      "rationale": "理由: 编写开发文档、架构说明和后续新增游戏的接入指南。"
+    }
+  ]
+}
