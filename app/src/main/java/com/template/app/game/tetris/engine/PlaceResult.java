@@ -15,7 +15,7 @@ public final class PlaceResult {
     /** 本次被消除的行索引（升序），供渲染层播放闪烁动画 */
     public final int[] clearedRows;
 
-    /** 本次放置获得的总分（含放置分 + 消行分 + 连击奖励） */
+    /** 本次放置获得的总分（= 消行分 + 连击奖励；放置本身不得分，见 TetrisConfig.LINE_SCORE） */
     public final int gained;
 
     /** 本次放置后的连击数（未消行时为 0） */
