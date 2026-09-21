@@ -44,7 +44,15 @@ public class ParkingViewModel extends AndroidViewModel {
      * {@link #onCleared()} 中 shutdown —— shutdown 不打断已在跑的任务，
      * 而它对一个已销毁的 LiveData postValue 是安全的空操作。
      */
-    private final ExecutorService generatorExecutor = Executors.newSingleThreadExecutor();
+    /**
+     * 关卡生成线程池。生成器最坏要跑数十万次状态展开，不能占用主线程。
+     * 线程显式降权到 {@link android.os.Process#THREAD_PRIORITY_BACKGROUND}，
+     * 避免其在模拟器/低端机上吃满单核、引发剧烈 GC 而饿死主线程（ANR）。
+     * {@link #onCleared()} 中 shutdown —— shutdown 不打断已在跑的任务，
+     * 而它对一个已销毁的 LiveData postValue 是安全的空操作。
+     */
+    private final ExecutorService generatorExecutor =
+            Executors.newSingleThreadExecutor(r -> new Thread(r, "parking-level-gen"));
 
     private final MutableLiveData<Integer> score = new MutableLiveData<>(0);
     private final MutableLiveData<Integer> level = new MutableLiveData<>(1);
@@ -176,7 +184,12 @@ public class ParkingViewModel extends AndroidViewModel {
             return;
         }
         loading.setValue(true);
-        generatorExecutor.execute(() -> levelEvent.postValue(generator.generate(levelIndex)));
+        generatorExecutor.execute(() -> {
+            // 生成器是 CPU/GC 大户：降权到后台优先级，确保主线程输入永远优先于生成，
+            // 从根本上消除"生成拖垮 UI 导致 Input dispatching ANR"的风险。
+            android.os.Process.setThreadPriority(android.os.Process.THREAD_PRIORITY_BACKGROUND);
+            levelEvent.postValue(generator.generate(levelIndex));
+        });
     }
 
     /** 把后台生成的关卡套进引擎。必须在主线程调用。 */

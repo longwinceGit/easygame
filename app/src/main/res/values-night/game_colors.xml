@@ -39,6 +39,9 @@
     <color name="game_parking_sign_text">#FFFFFF</color>
     <color name="game_parking_sign_text_dim">#B3FFFFFF</color>
     <color name="game_parking_car_shadow">#40000000</color>
+    <color name="game_parking_road_bg">#424242</color>
+    <color name="game_parking_road_line">#9E9E9E</color>
+    <color name="game_parking_road_arrow">#BDBDBD</color>
 
     <!-- 道具按钮（暗色主题） -->
     <color name="parking_prop_bg">#FFD54F</color>

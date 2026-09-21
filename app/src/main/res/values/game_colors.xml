@@ -47,6 +47,9 @@
     <color name="game_parking_sign_text">#FFFFFF</color>
     <color name="game_parking_sign_text_dim">#B3FFFFFF</color>
     <color name="game_parking_car_shadow">#29000000</color>
+    <color name="game_parking_road_bg">#BDBDBD</color>
+    <color name="game_parking_road_line">#FAFAFA</color>
+    <color name="game_parking_road_arrow">#FAFAFA</color>
 
     <!-- 道具按钮（黄色胶囊，对应参考截图） -->
     <color name="parking_prop_bg">#FFC93C</color>

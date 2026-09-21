@@ -10,6 +10,7 @@
         android:theme="@style/Theme.Template"
         android:supportsRtl="true"
         android:hardwareAccelerated="true"
+        android:enableOnBackInvokedCallback="true"
         tools:targetApi="34">
 
         <activity

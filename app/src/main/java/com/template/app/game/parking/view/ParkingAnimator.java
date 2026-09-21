@@ -38,6 +38,10 @@ class ParkingAnimator {
     static final long BOARD_MAX_MS = 820L;
     /** 上完客后整车开走的时长。 */
     static final long LEAVE_DURATION_MS = 480L;
+    /** 上完客后整车驶下马路、落到车道上的时长。 */
+    static final long ROAD_ENTER_MS = 300L;
+    /** 车在马路上自左向右开到右端屏幕外的时长。 */
+    static final long ROAD_EXIT_MS = 760L;
 
     // ---- 拖动 ----
 
@@ -86,8 +90,8 @@ class ParkingAnimator {
     /** 正在播放的那辆车；为 null 时若队列非空则下一帧取出。 */
     private LeavingCar activeBoard;
 
-    /** 当前处于"上客"还是"开走"阶段。false = 上客，true = 开走。 */
-    private boolean boardLeaving;
+    /** 当前阶段：0=上客，1=驶下马路，2=马路上自左向右开走。 */
+    private int boardPhase;
 
     /** 当前阶段起始时刻。 */
     private long boardPhaseStart;
@@ -98,12 +102,14 @@ class ParkingAnimator {
         final Direction direction;
         final int length;
         final int count;
-        final float spotX, spotY, spotAngle;   // 上客点：车在此处接客
-        final float leaveX, leaveY, leaveAngle; // 离场终点 + 终点倾角（通常 0，即转正）
-        final float width, height;              // 车身尺寸（按上客点场景取棋盘/接客位尺度）
+        final float spotX, spotY, spotAngle;   // 上客点：车在接客位接客（straightOut 时为棋盘斜度）
+        final float roadX, roadY;              // 下到马路后的落点（angle 固定 0）
+        final float leaveX, leaveY, leaveAngle; // 离场终点：马路上自左向右开到右端屏幕外（angle=0）
+        final float width, height;             // 车身尺寸（按上客点场景取棋盘/接客位尺度）
 
         LeavingCar(int colorIndex, Direction direction, int length, int count,
                    float spotX, float spotY, float spotAngle,
+                   float roadX, float roadY,
                    float leaveX, float leaveY, float leaveAngle,
                    float width, float height) {
             this.colorIndex = colorIndex;
@@ -113,6 +119,8 @@ class ParkingAnimator {
             this.spotX = spotX;
             this.spotY = spotY;
             this.spotAngle = spotAngle;
+            this.roadX = roadX;
+            this.roadY = roadY;
             this.leaveX = leaveX;
             this.leaveY = leaveY;
             this.leaveAngle = leaveAngle;
@@ -139,7 +147,8 @@ class ParkingAnimator {
     /**
      * 每帧推进编排状态机。
      * <p>
-     * 单辆车：先"上客" {@code count×BOARD_MS_PER_PAX}（夹紧到上限），再"开走" {@link #LEAVE_DURATION_MS}。
+     * 单辆车分三阶段：先"上客" {@code count×BOARD_MS_PER_PAX}（夹紧到上限），
+     * 再"驶下马路" {@link #ROAD_ENTER_MS}，最后"马路上自左向右开走" {@link #ROAD_EXIT_MS}。
      * 队列里有多辆时依次播放——这就是"一辆辆开走"。
      */
     void tickChoreography(long now) {
@@ -147,23 +156,28 @@ class ParkingAnimator {
             if (!boardQueue.isEmpty()) {
                 activeBoard = boardQueue.pollFirst();
                 boardPhaseStart = now;
-                boardLeaving = false;
+                boardPhase = 0;
             }
             return;
         }
-        if (!boardLeaving) {
+        if (boardPhase == 0) {
             long duration = boardDuration(activeBoard.count);
             if (now - boardPhaseStart >= duration) {
-                boardLeaving = true;
+                boardPhase = 1;
                 boardPhaseStart = now;
             }
-        } else if (now - boardPhaseStart >= LEAVE_DURATION_MS) {
+        } else if (boardPhase == 1) {
+            if (now - boardPhaseStart >= ROAD_ENTER_MS) {
+                boardPhase = 2;
+                boardPhaseStart = now;
+            }
+        } else if (now - boardPhaseStart >= ROAD_EXIT_MS) {
             activeBoard = null;
-            boardLeaving = false;
+            boardPhase = 0;
             if (!boardQueue.isEmpty()) {
                 activeBoard = boardQueue.pollFirst();
                 boardPhaseStart = now;
-                boardLeaving = false;
+                boardPhase = 0;
             }
         }
     }
@@ -182,7 +196,7 @@ class ParkingAnimator {
         if (activeBoard == null) {
             return 0;
         }
-        if (boardLeaving) {
+        if (boardPhase != 0) {
             return activeBoard.count;
         }
         int n = (int) ((now - boardPhaseStart) * activeBoard.count / boardDuration(activeBoard.count));
@@ -191,15 +205,28 @@ class ParkingAnimator {
 
     /** 当前车处于"开走"阶段（而非"上客"）。 */
     boolean isLeaving(long now) {
-        return activeBoard != null && boardLeaving;
+        return activeBoard != null && boardPhase != 0;
     }
 
-    /** 开走阶段的进度 0..1。 */
-    float leaveProgress(long now) {
+    /** 当前处于哪个阶段：0=上客，1=驶下马路，2=马路上自左向右开走。 */
+    int boardPhase(long now) {
+        return activeBoard == null ? 0 : boardPhase;
+    }
+
+    /** 驶下马路阶段的进度 0..1。 */
+    float roadEnterProgress(long now) {
         if (activeBoard == null) {
             return 0f;
         }
-        return Math.min(1f, (now - boardPhaseStart) / (float) LEAVE_DURATION_MS);
+        return Math.min(1f, (now - boardPhaseStart) / (float) ROAD_ENTER_MS);
+    }
+
+    /** 马路上自左向右开走阶段的进度 0..1。 */
+    float exitProgress(long now) {
+        if (activeBoard == null) {
+            return 0f;
+        }
+        return Math.min(1f, (now - boardPhaseStart) / (float) ROAD_EXIT_MS);
     }
 
     int boardColorIndex() {
@@ -240,6 +267,14 @@ class ParkingAnimator {
 
     float boardLeaveAngle() {
         return activeBoard.leaveAngle;
+    }
+
+    float boardRoadX() {
+        return activeBoard.roadX;
+    }
+
+    float boardRoadY() {
+        return activeBoard.roadY;
     }
 
     float boardWidth() {

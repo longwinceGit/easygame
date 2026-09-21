@@ -23,6 +23,7 @@ class ParkingGeometry {
 
     static final float QUEUE_HEIGHT_DP = 46f;
     static final float PICKUP_HEIGHT_DP = 62f;
+    static final float ROAD_HEIGHT_DP = 44f;
     static final float GAP_DP = 10f;
     static final float SLOT_GAP_DP = 6f;
 
@@ -54,6 +55,13 @@ class ParkingGeometry {
     float pickupHeight;
     float slotWidth;
 
+    /** 接客区与停车场之间的横向马路：左右贯通，与队列/接客带等宽。 */
+    float roadTop;
+    float roadHeight;
+    float roadLeft;
+    float roadWidth;
+    float roadCenterY;
+
     /** 复用的输出槽：几何方法把计算结果写到这里，避免在绘制路径上分配对象。 */
     float tmpX;
     float tmpY;
@@ -70,7 +78,11 @@ class ParkingGeometry {
         float gap = GAP_DP * density;
         queueTop = padTop;
         pickupTop = queueTop + queueHeight + gap;
-        float lotTop = pickupTop + pickupHeight + gap;
+        // 注意：必须写入同名字段（不要写成局部变量），否则 roadTop/roadHeight 始终为 0，
+        // 会让 drawRoad 的雪佛龙箭头循环 step=0 陷入死循环 → 主线程 ANR。
+        roadTop = pickupTop + pickupHeight + gap;
+        roadHeight = ROAD_HEIGHT_DP * density;
+        float lotTop = roadTop + roadHeight + gap;
         float availableHeight = contentHeight - (lotTop - padTop);
 
         double radians = Math.toRadians(Math.abs(ROTATION_DEGREES));
@@ -99,6 +111,10 @@ class ParkingGeometry {
         stripWidth = bboxWidth;
         slotWidth = (stripWidth - SLOT_GAP_DP * density * (ParkingConfig.PICKUP_SLOTS - 1))
             / ParkingConfig.PICKUP_SLOTS;
+
+        roadLeft = stripLeft;
+        roadWidth = stripWidth;
+        roadCenterY = roadTop + roadHeight / 2f;
     }
 
     // ==================================================================
@@ -148,7 +164,7 @@ class ParkingGeometry {
         float sin = (float) Math.sin(radians);
         float spanHeight = (ParkingConfig.COLUMNS * sin + ParkingConfig.ROWS * cos)
             * MIN_CELL_DP * density;
-        return (QUEUE_HEIGHT_DP + PICKUP_HEIGHT_DP + GAP_DP * 2f) * density + spanHeight;
+        return (QUEUE_HEIGHT_DP + PICKUP_HEIGHT_DP + ROAD_HEIGHT_DP + GAP_DP * 3f) * density + spanHeight;
     }
 
     float boardHeight() {

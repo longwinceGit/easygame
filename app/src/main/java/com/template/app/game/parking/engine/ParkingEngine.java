@@ -321,7 +321,17 @@ public final class ParkingEngine {
             rebuildGrid();
             boardSteps = resolvePickup(v);
             boarded = totalBoarded(boardSteps);
-            pickupSlot = v.inPickup() ? pickupIndex(v) : -1;
+            // 这辆车若被当场接客离场，记下它停进的接客位，
+            // 让离场动画把车开进乘客区的对应车位（而非在棋盘出口直接上客）。
+            for (BoardStep step : boardSteps) {
+                if (step.vehicleId == v.id) {
+                    pickupSlot = step.slot;
+                    break;
+                }
+            }
+            if (pickupSlot < 0 && v.inPickup()) {
+                pickupSlot = pickupIndex(v);
+            }
         } else {
             rebuildGrid();
         }
@@ -453,10 +463,11 @@ public final class ParkingEngine {
             front.count -= take;
             passengersServed += take;
             score += take * ParkingConfig.SCORE_PER_PASSENGER;
-            boolean straightOut = match == moved;
-            int slot = straightOut ? -1 : pickupIndex(match);
+            // 所有被接客的车都走"停进接客位"路径：即便刚驶出即对色的那辆，
+            // 也先开进乘客区的接客位再上客，保证流程统一（车都先到乘客区接人）。
+            int slot = pickupIndex(match);
             steps.add(new BoardStep(match.id, match.colorIndex, match.direction,
-                match.length, take, slot, straightOut));
+                match.length, take, slot, false));
             match.place = Vehicle.PLACE_GONE;
             if (front.count == 0) {
                 queue.remove(0);

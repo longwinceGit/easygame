@@ -5,13 +5,9 @@ import com.template.app.game.parking.model.Level;
 import com.template.app.game.parking.model.PassengerGroup;
 import com.template.app.game.parking.model.Vehicle;
 
-import java.util.ArrayDeque;
 import java.util.ArrayList;
-import java.util.Deque;
-import java.util.HashSet;
 import java.util.List;
 import java.util.Random;
-import java.util.Set;
 
 /**
  * 关卡生成器：<b>随机布局 + BFS 求解</b>（ADR-008）。
@@ -33,6 +29,13 @@ public final class ParkingLevelGenerator {
 
     private static final int PLACEMENT_ATTEMPTS = 160;
 
+    /**
+     * 单次 generate 的墙钟预算。生成器在后台线程跑，但其 BFS 求解会大量分配对象、
+     * 在低端机/模拟器上可能把单核吃满并引发剧烈 GC，反而饿死主线程导致 ANR。
+     * 超过预算就立刻走 {@link #emergencyLevel} 保底，玩家永远有得玩，且生成永不拖垮 UI。
+     */
+    private static final long GENERATE_TIME_BUDGET_NS = 1_200_000_000L; // 1.2s
+
     private final Random random;
 
     public ParkingLevelGenerator() {
@@ -52,12 +55,18 @@ public final class ParkingLevelGenerator {
      * 生成一个关卡。
      * <p>
      * <b>必须在后台线程调用</b>（ADR-007）：最坏情况是数十万次状态展开。
+     * 为避免在低端机/模拟器上耗时长到拖垮主线程（ANR），这里加了<b>墙钟预算</b>
+     * {@link #GENERATE_TIME_BUDGET_NS}：一旦超时立刻走 {@link #emergencyLevel} 保底。
      */
     public Level generate(int levelIndex) {
         int count = ParkingConfig.vehicleCount(levelIndex);
+        long deadline = System.nanoTime() + GENERATE_TIME_BUDGET_NS;
 
         for (int attempt = 0; attempt < ParkingConfig.GENERATOR_MAX_ATTEMPTS; attempt++) {
-            Level level = tryGenerate(levelIndex, count);
+            if (System.nanoTime() > deadline) {
+                return emergencyLevel(levelIndex);
+            }
+            Level level = tryGenerate(levelIndex, count, deadline);
             if (level != null) {
                 return level;
             }
@@ -66,7 +75,10 @@ public final class ParkingLevelGenerator {
         while (count > 2) {
             count--;
             for (int attempt = 0; attempt < 8; attempt++) {
-                Level level = tryGenerate(levelIndex, count);
+                if (System.nanoTime() > deadline) {
+                    return emergencyLevel(levelIndex);
+                }
+                Level level = tryGenerate(levelIndex, count, deadline);
                 if (level != null) {
                     return level;
                 }
@@ -80,12 +92,12 @@ public final class ParkingLevelGenerator {
     // 生成流程
     // ==================================================================
 
-    private Level tryGenerate(int levelIndex, int vehicleCount) {
+    private Level tryGenerate(int levelIndex, int vehicleCount, long deadline) {
         List<Vehicle> layout = randomLayout(vehicleCount);
         if (layout == null) {
             return null;
         }
-        Solution solution = solve(layout, vehicleCount);
+        Solution solution = solve(layout, vehicleCount, deadline);
         // 质量门：拒绝"每辆车都能直接开走"的布局——那种局面点 N 下就通关，太简单
         if (solution == null
             || solution.totalMoves < ParkingConfig.minSolutionMoves(levelIndex)) {
@@ -196,7 +208,7 @@ public final class ParkingLevelGenerator {
         }
     }
 
-    private Solution solve(List<Vehicle> layout, int vehicleCount) {
+    private Solution solve(List<Vehicle> layout, int vehicleCount, long deadline) {
         int n = layout.size();
         Board board = new Board(layout);
         boolean[] gone = new boolean[n];
@@ -216,7 +228,7 @@ public final class ParkingLevelGenerator {
                 if (gone[i]) {
                     continue;
                 }
-                Node goal = board.extract(i, anchors, gone);
+                Node goal = board.extract(i, anchors, gone, deadline);
                 if (goal == null) {
                     continue;
                 }
@@ -248,9 +260,6 @@ public final class ParkingLevelGenerator {
         private final int[] dirRow;
         private final int[] dirCol;
 
-        /** 状态编码的复用缓冲，避免在 BFS 热路径上反复分配。 */
-        private final StringBuilder keyBuilder = new StringBuilder(ParkingConfig.MAX_VEHICLES);
-
         Board(List<Vehicle> layout) {
             size = layout.size();
             lengths = new int[size];
@@ -268,44 +277,83 @@ public final class ParkingLevelGenerator {
 
         /**
          * 搜索"把 target 沿箭头开出边界"的最短操作序列。
+         * <p>
+         * 热路径<b>零对象分配</b>：访问集用原始 long 开放寻址集合（避免每状态一次
+         * {@code Long} 装箱），局面用 long 编码，子节点由父局面的 long 直接改写对应车辆
+         * 的 6-bit 字段得到——不再为每辆车克隆 {@code int[]}，也不再新建 {@code Node}。
+         * 仅命中目标时解一次码、生成一份终局锚点。这正是压住"整机 CPU/页错误飙升、
+         * 主线程被拖垮"的最后一块短板。
          *
          * @return 终局节点；放弃（超限）或无解时返回 null
          */
-        Node extract(int target, int[] start, boolean[] gone) {
-            Set<String> visited = new HashSet<>();
-            Deque<Node> frontier = new ArrayDeque<>();
-            Node root = new Node(start.clone(), null);
-            visited.add(key(root.anchors, gone));
-            frontier.add(root);
+        Node extract(int target, int[] start, boolean[] gone, long deadline) {
+            int n = size;
+            LongSet visited = new LongSet(ParkingConfig.GENERATOR_MAX_BFS_STATES);
+            int cap = ParkingConfig.GENERATOR_MAX_BFS_STATES + 2;
+            int[] frontier = new int[cap];
+            long[] states = new long[cap];
+            int[] depthArr = new int[cap];
+            int[] anchors = new int[n]; // 可复用的解码 scratch
+
+            int root = 0;
+            states[root] = pack(start);
+            depthArr[root] = 0;
+            visited.add(states[root]);
+            int head = 0, tail = 0;
+            frontier[tail++] = root;
 
             int expanded = 0;
-            while (!frontier.isEmpty()) {
-                if (++expanded > ParkingConfig.GENERATOR_MAX_BFS_STATES) {
+            while (head < tail) {
+                if (++expanded > ParkingConfig.GENERATOR_MAX_BFS_STATES
+                        || System.nanoTime() > deadline) {
                     return null;
                 }
-                Node current = frontier.pollFirst();
-                if (boundary(target, current.anchors) == 0) {
-                    return current;
+                int cur = frontier[head++];
+                long curState = states[cur];
+                unpack(curState, anchors);
+                if (boundary(target, anchors) == 0) {
+                    return new Node(unpackClone(curState, n), depthArr[cur]);
                 }
-                for (int i = 0; i < size; i++) {
+                for (int i = 0; i < n; i++) {
                     if (gone[i]) {
                         continue;
                     }
                     // sign = 1 沿箭头滑到底（点击）；sign = -1 反向滑到底（拖动）
                     for (int sign = 1; sign >= -1; sign -= 2) {
-                        int steps = maxSteps(current.anchors, gone, i, sign, target);
+                        int steps = maxSteps(anchors, gone, i, sign, target);
                         if (steps == 0) {
                             continue;
                         }
-                        int[] next = current.anchors.clone();
-                        next[i] += steps * sign * (dirRow[i] * ParkingConfig.COLUMNS + dirCol[i]);
-                        if (visited.add(key(next, gone))) {
-                            frontier.addLast(new Node(next, current));
+                        int delta = steps * sign
+                            * (dirRow[i] * ParkingConfig.COLUMNS + dirCol[i]);
+                        int shift = i * 6;
+                        int newField = ((int) ((curState >>> shift) & 0x3FL) + delta) & 0x3F;
+                        long nextState = (curState & ~(0x3FL << shift))
+                            | ((long) newField << shift);
+                        if (visited.add(nextState)) {
+                            int node = tail;
+                            states[node] = nextState;
+                            depthArr[node] = depthArr[cur] + 1;
+                            frontier[tail++] = node;
                         }
                     }
                 }
             }
             return null;
+        }
+
+        /** 把 long 局面解码进复用缓存 out。 */
+        private static void unpack(long state, int[] out) {
+            for (int i = 0; i < out.length; i++) {
+                out[i] = (int) ((state >>> (i * 6)) & 0x3FL);
+            }
+        }
+
+        /** 解码出一份新的 int[] 锚点（仅命中目标时调用）。 */
+        private static int[] unpackClone(long state, int size) {
+            int[] out = new int[size];
+            unpack(state, out);
+            return out;
         }
 
         private int maxSteps(int[] anchors, boolean[] gone, int index, int sign, int target) {
@@ -385,39 +433,62 @@ public final class ParkingLevelGenerator {
         }
 
         /**
-         * 状态编码：每车一个 char（锚点 0..63，已驶出记 0xFFFF）。
+         * 状态编码为 long：每车 6 bit 锚点（0..63），最多 10 车 = 60 bit，恰好塞进 long。
+         * 单次 extract 内 gone 不变，故无需编码 gone，仅锚点即可唯一确定局面。
          * <p>
-         * 早期用 long 打包（6 bit/车）把车辆数卡在 9 辆以内，
-         * 换成 String 后不再受 64 bit 限制——车数才能随关卡涨到 12 辆。
-         * StringBuilder 复用，只有 toString() 会分配。
+         * 相比原先的 StringBuilder+String，避免了 BFS 热路径上每个状态一次 String 分配，
+         * 大幅降低 GC 压力——这正是打开游戏时整机 CPU/页错误飙升、主线程被拖垮的根因。
          */
-        private String key(int[] anchors, boolean[] gone) {
-            keyBuilder.setLength(0);
+        private long pack(int[] anchors) {
+            long state = 0L;
             for (int i = 0; i < size; i++) {
-                keyBuilder.append((char) (gone[i] ? 0xFFFF : anchors[i]));
+                state = (state << 6) | (anchors[i] & 0x3FL);
             }
-            return keyBuilder.toString();
+            return state;
         }
     }
 
-    /** BFS 节点：持有完整状态与父指针，用于回溯操作序列长度。 */
+    /** 原始 long 开放寻址集合：避免 BFS 热路径上每个状态一次 {@code Long} 装箱分配。 */
+    private static final class LongSet {
+        private final long[] table;
+        private final int mask;
+
+        LongSet(int maxStates) {
+            int cap = 1;
+            while (cap <= maxStates * 2) {
+                cap <<= 1;
+            }
+            table = new long[cap];
+            mask = cap - 1;
+        }
+
+        /** @return true 表示首次加入（之前不存在）。 */
+        boolean add(long state) {
+            long key = state ^ Long.MIN_VALUE; // 翻转最高位：真实状态永不等于空槽 0
+            int idx = (int) (key & mask);
+            while (table[idx] != 0L) {
+                if (table[idx] == key) {
+                    return false;
+                }
+                idx = (idx + 1) & mask;
+            }
+            table[idx] = key;
+            return true;
+        }
+    }
+
+    /** BFS 节点：仅持有终局锚点与操作步数（步数由 BFS 数组直接记录，无需回溯父链）。 */
     private static final class Node {
 
         private final int[] anchors;
-        private final Node parent;
+        private final int depth;
 
-        Node(int[] anchors, Node parent) {
+        Node(int[] anchors, int depth) {
             this.anchors = anchors;
-            this.parent = parent;
+            this.depth = depth;
         }
 
         int depth() {
-            int depth = 0;
-            Node cursor = this;
-            while (cursor.parent != null) {
-                depth++;
-                cursor = cursor.parent;
-            }
             return depth;
         }
     }

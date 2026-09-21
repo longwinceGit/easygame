@@ -14,6 +14,7 @@ import com.template.app.game.parking.engine.BoardStep;
 import com.template.app.game.parking.engine.MoveResult;
 import com.template.app.game.parking.engine.ParkingConfig;
 import com.template.app.game.parking.engine.ParkingEngine;
+import com.template.app.game.parking.model.Direction;
 import com.template.app.game.parking.model.Vehicle;
 
 import java.util.ArrayList;
@@ -123,19 +124,10 @@ public class ParkingView extends View implements ParkingTouchHandler.Host {
             return;
         }
 
-        // 被操作的车是否"直接开出接客"（它会出现在 boardSteps 里），这种不播占位驶入动画
-        boolean movedBoarded = false;
-        if (result.boardSteps != null) {
-            for (BoardStep step : result.boardSteps) {
-                if (step.straightOut) {
-                    movedBoarded = true;
-                    break;
-                }
-            }
-        }
-
-        if (!movedBoarded && vehicle != null) {
-            // 仅占位：车先沿车头方向冲出场地，再拐进接客位并停住
+        // 驶出的车统一先沿车头方向冲出场地，再拐进乘客区的接客位并停住；
+        // 上客（接满乘客）由离场编排在接客位播放，车头转正朝右后再驶下马路、自左向右开走。
+        if (vehicle != null) {
+            // 车先沿自己的车头方向冲出场地，再拐进乘客区的接客位
             geometry.vehicleScreenCenter(result.fromRow, result.fromCol,
                 vehicle.length, vehicle.horizontal);
             float fromX = geometry.tmpX;
@@ -153,8 +145,15 @@ public class ParkingView extends View implements ParkingTouchHandler.Host {
                 outX, outY, toX, geometry.slotCenterY(), result.pickupSlot >= 0);
         }
 
-        // 把本次接客离场的车（可能含直接开出的那辆 + 已在接客位等到的车）排进离场动画
-        enqueueBoardSteps(result.boardSteps, result);
+        // 接客离场的车排进离场动画。被当场接走的那辆刚驶出停车场、正在播放驶入接客位的动画，
+        // 待其到位后再开始上客，避免车还在半路而乘客已经上车的双重影像。
+        if (result.boardSteps != null && !result.boardSteps.isEmpty()) {
+            final List<BoardStep> steps = result.boardSteps;
+            postDelayed(() -> {
+                enqueueBoardSteps(steps, result);
+                invalidate();
+            }, ParkingAnimator.EXIT_DURATION_MS);
+        }
         invalidate();
     }
 
@@ -179,42 +178,25 @@ public class ParkingView extends View implements ParkingTouchHandler.Host {
         anim.enqueueBoardCars(cars);
     }
 
-    /** 为单个接客步骤算好上客点 / 离场终点等屏幕坐标。 */
+    /**
+     * 为单个接客步骤算好上客点 / 离场终点等屏幕坐标。
+     * <p>
+     * <b>所有离场车都在乘客区（接客位）上客</b>，车身统一转正、<b>车头朝右</b>：
+     * 接满乘客后先驶下到马路、再自左向右开走——车头方向始终朝右，
+     * 修正此前"车已开到马路上却仍朝原车场方向"的问题。
+     */
     private ParkingAnimator.LeavingCar buildLeavingCar(BoardStep step, MoveResult result) {
-        if (step.straightOut && result != null) {
-            // 直接开出接客：上客点在棋盘出口外（沿车头方向 1.5 格处），倾角保持棋盘斜度。
-            // 基点是这辆车驶出后的边界格（result.toRow/toCol）。
-            geometry.vehicleScreenCenter(result.toRow, result.toCol,
-                step.length, !step.direction.isVertical());
-            float fromX = geometry.tmpX;
-            float fromY = geometry.tmpY;
-            geometry.rotateVector(step.direction.dCol, step.direction.dRow);
-            float distance = geometry.cell * 1.5f;
-            float outX = fromX + geometry.tmpX * distance;
-            float outY = fromY + geometry.tmpY * distance;
-            float dirX = outX - fromX;
-            float dirY = outY - fromY;
-            double len = Math.hypot(dirX, dirY);
-            float ux = len > 0 ? (float) (dirX / len) : 0f;
-            float uy = len > 0 ? (float) (dirY / len) : 0f;
-            float far = geometry.cell * 16f;
-            boolean horizontal = !step.direction.isVertical();
-            float w = geometry.vehicleWidth(step.length, horizontal);
-            float h = geometry.vehicleHeight(step.length, horizontal);
-            return new ParkingAnimator.LeavingCar(step.colorIndex, step.direction, step.length,
-                step.count, outX, outY, ParkingGeometry.ROTATION_DEGREES,
-                outX + ux * far, outY + uy * far, 0f, w, h);
-        }
-
-        // 在接客位等到队首：上客点即该车车位，离场沿接客带向右驶出屏幕
-        float sx = geometry.slotCenterX(step.slot);
+        float sx = step.slot >= 0
+            ? geometry.slotCenterX(step.slot)
+            : geometry.stripLeft + geometry.stripWidth / 2f;
         float sy = geometry.slotCenterY();
-        float w = geometry.slotWidth * 0.8f;
-        float h = geometry.pickupHeight * 0.5f;
-        float far = geometry.cell * 16f;
-        return new ParkingAnimator.LeavingCar(step.colorIndex, step.direction, step.length,
+        // 横向车：车头向右，长度方向沿屏幕 x 轴展开（width 为长边）
+        float w = geometry.vehicleWidth(step.length, true);
+        float h = geometry.vehicleHeight(step.length, true);
+        return new ParkingAnimator.LeavingCar(step.colorIndex, Direction.RIGHT, step.length,
             step.count, sx, sy, 0f,
-            geometry.stripLeft + geometry.stripWidth + w, sy, 0f, w, h);
+            sx, geometry.roadCenterY,
+            geometry.roadLeft + geometry.roadWidth + w, geometry.roadCenterY, 0f, w, h);
     }
 
     /** 播放接客浮字。 */

@@ -56,6 +56,9 @@ class ParkingRenderer {
     private final Paint arrowOutlinePaint = new Paint(Paint.ANTI_ALIAS_FLAG);
     private final Paint accentPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
     private final Paint popupPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
+    private final Paint roadPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
+    private final Paint roadLinePaint = new Paint(Paint.ANTI_ALIAS_FLAG);
+    private final Paint roadArrowPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
 
     private final RectF rect = new RectF();
     private final RectF inner = new RectF();
@@ -135,6 +138,19 @@ class ParkingRenderer {
         popupPaint.setTextAlign(Paint.Align.CENTER);
         popupPaint.setTextSize(16f * density);
         popupPaint.setFakeBoldText(true);
+
+        roadPaint.setStyle(Paint.Style.FILL);
+        roadPaint.setColor(ContextCompat.getColor(context, R.color.game_parking_road_bg));
+
+        roadLinePaint.setStyle(Paint.Style.STROKE);
+        roadLinePaint.setStrokeWidth(2f * density);
+        roadLinePaint.setColor(ContextCompat.getColor(context, R.color.game_parking_road_line));
+        roadLinePaint.setPathEffect(dash);
+
+        roadArrowPaint.setStyle(Paint.Style.STROKE);
+        roadArrowPaint.setStrokeWidth(2.4f * density);
+        roadArrowPaint.setColor(ContextCompat.getColor(context, R.color.game_parking_road_arrow));
+        roadArrowPaint.setStrokeJoin(Paint.Join.ROUND);
     }
 
     // ==================================================================
@@ -152,6 +168,7 @@ class ParkingRenderer {
         anim.tickChoreography(now);
         drawQueue(canvas, engine, anim, now);
         drawPickup(canvas, engine, anim);
+        drawRoad(canvas);
         drawGround(canvas);
         drawVehicles(canvas, engine, anim, removeMode);
         drawExitingVehicle(canvas, anim, now);
@@ -285,6 +302,33 @@ class ParkingRenderer {
     }
 
     // ==================================================================
+    // 横向马路（接客区与停车场之间）
+    // ==================================================================
+
+    private void drawRoad(Canvas canvas) {
+        float left = geometry.roadLeft;
+        float top = geometry.roadTop;
+        float right = left + geometry.roadWidth;
+        float bottom = top + geometry.roadHeight;
+        float radius = 10f * geometry.density;
+        rect.set(left, top, right, bottom);
+        canvas.drawRoundRect(rect, radius, radius, roadPaint);
+
+        // 中线：虚线车道分隔线
+        float midY = top + (bottom - top) / 2f;
+        canvas.drawLine(left + 6f * geometry.density, midY,
+            right - 6f * geometry.density, midY, roadLinePaint);
+
+        // 向右的雪佛龙箭头，明确"出口在右"
+        float arrowSize = geometry.roadHeight * 0.22f;
+        float step = arrowSize * 2.6f;
+        for (float x = left + geometry.roadWidth * 0.5f; x < right - arrowSize; x += step) {
+            canvas.drawLine(x, midY - arrowSize, x + arrowSize, midY, roadArrowPaint);
+            canvas.drawLine(x + arrowSize, midY, x, midY + arrowSize, roadArrowPaint);
+        }
+    }
+
+    // ==================================================================
     // 停车场（倾斜）
     // ==================================================================
 
@@ -371,25 +415,34 @@ class ParkingRenderer {
         if (!anim.isBoardingActive()) {
             return;
         }
-        boolean leaving = anim.isLeaving(now);
-        float progress = leaving ? anim.leaveProgress(now) : 0f;
-        float eased = easeInOutCubic(progress);
-
-        float x = leaving
-            ? lerp(anim.boardSpotX(), anim.boardLeaveX(), eased)
-            : anim.boardSpotX();
-        float y = leaving
-            ? lerp(anim.boardSpotY(), anim.boardLeaveY(), eased)
-            : anim.boardSpotY();
-        float angle = leaving
-            ? lerp(anim.boardSpotAngle(), anim.boardLeaveAngle(), eased)
-            : anim.boardSpotAngle();
-        float alpha = leaving ? (progress < 0.6f ? 1f : 1f - (progress - 0.6f) / 0.4f) : 1f;
+        int phase = anim.boardPhase(now);
+        float x, y, angle, alpha;
+        if (phase == 0) {
+            // 上客：停在接客位
+            x = anim.boardSpotX();
+            y = anim.boardSpotY();
+            angle = anim.boardSpotAngle();
+            alpha = 1f;
+        } else if (phase == 1) {
+            // 驶下马路：从接客位垂直落到车道
+            float t = easeInOutCubic(anim.roadEnterProgress(now));
+            x = lerp(anim.boardSpotX(), anim.boardRoadX(), t);
+            y = lerp(anim.boardSpotY(), anim.boardRoadY(), t);
+            angle = lerp(anim.boardSpotAngle(), 0f, t);
+            alpha = 1f;
+        } else {
+            // 马路上自左向右开走并淡出
+            float t = easeInOutCubic(anim.exitProgress(now));
+            x = lerp(anim.boardRoadX(), anim.boardLeaveX(), t);
+            y = lerp(anim.boardRoadY(), anim.boardLeaveY(), t);
+            angle = anim.boardLeaveAngle();
+            alpha = t < 0.6f ? 1f : 1f - (t - 0.6f) / 0.4f;
+        }
 
         drawCarShape(canvas, anim.boardDirection(), anim.boardColorIndex(), x, y,
             angle, alpha, 1f, anim.boardWidth(), anim.boardHeight());
 
-        // 已上车的乘客：车内沿长轴排开的小人
+        // 已上车的乘客：车内沿长轴排开的小人（驶下与开走阶段为满载）
         int aboard = anim.boardedSoFar(now);
         if (aboard > 0) {
             drawPassengersInCar(canvas, x, y, angle, aboard,
