@@ -1,0 +1,156 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="@color/bg_page"
+    android:orientation="vertical">
+
+    <!-- 顶部栏：返回 / 金币样式分数胶囊 / 关卡号 -->
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="56dp"
+        android:gravity="center_vertical"
+        android:orientation="horizontal"
+        android:paddingStart="4dp"
+        android:paddingEnd="12dp">
+
+        <ImageButton
+            android:id="@+id/btn_back"
+            android:layout_width="48dp"
+            android:layout_height="48dp"
+            android:background="?attr/selectableItemBackgroundBorderless"
+            android:contentDescription="@string/parking_back_to_hub"
+            android:src="@drawable/ic_arrow_back"
+            app:tint="?attr/colorOnSurface" />
+
+        <TextView
+            android:id="@+id/tv_score"
+            android:layout_width="wrap_content"
+            android:layout_height="32dp"
+            android:layout_marginStart="4dp"
+            android:background="@drawable/bg_parking_score"
+            android:gravity="center"
+            android:minWidth="56dp"
+            android:paddingStart="12dp"
+            android:paddingEnd="12dp"
+            android:text="0"
+            android:textColor="@color/parking_prop_text"
+            android:textSize="15sp"
+            android:textStyle="bold" />
+
+        <TextView
+            android:id="@+id/tv_title"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_marginStart="8dp"
+            android:layout_weight="1"
+            android:text="@string/parking_title"
+            android:textAppearance="@style/TextAppearance.Template.SectionTitle" />
+
+    </LinearLayout>
+
+    <!-- 提示条：新手引导 / 道具模式说明 -->
+    <TextView
+        android:id="@+id/tv_hint"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:gravity="center"
+        android:paddingStart="@dimen/spacing_xl"
+        android:paddingEnd="@dimen/spacing_xl"
+        android:paddingBottom="@dimen/spacing_sm"
+        android:text="@string/parking_hint"
+        android:textAppearance="@style/TextAppearance.Template.Caption" />
+
+    <!-- 乘客队列 + 接客位 + 倾斜停车场（同一个 View，见 ADR-002） -->
+    <FrameLayout
+        android:layout_width="match_parent"
+        android:layout_height="0dp"
+        android:layout_weight="1">
+
+        <com.template.app.game.parking.view.ParkingView
+            android:id="@+id/parking_view"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:paddingStart="@dimen/spacing_xl"
+            android:paddingEnd="@dimen/spacing_xl"
+            android:paddingBottom="@dimen/spacing_sm" />
+
+        <ProgressBar
+            android:id="@+id/progress"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_gravity="center"
+            android:visibility="gone" />
+
+    </FrameLayout>
+
+    <!-- 道具栏：排序 / 刷新 / 移除（黄色胶囊，对应参考截图） -->
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:paddingStart="@dimen/spacing_xl"
+        android:paddingEnd="@dimen/spacing_xl"
+        android:paddingTop="@dimen/spacing_sm"
+        android:paddingBottom="@dimen/spacing_md">
+
+        <com.google.android.material.button.MaterialButton
+            android:id="@+id/btn_sort"
+            style="@style/Widget.Material3.Button"
+            android:layout_width="0dp"
+            android:layout_height="48dp"
+            android:layout_marginEnd="@dimen/spacing_sm"
+            android:layout_weight="1"
+            android:insetTop="0dp"
+            android:insetBottom="0dp"
+            android:text="@string/parking_sort"
+            android:textColor="@color/parking_prop_text"
+            android:textSize="14sp"
+            android:textStyle="bold"
+            app:backgroundTint="@color/parking_prop_bg"
+            app:cornerRadius="18dp"
+            app:strokeColor="@color/parking_prop_stroke"
+            app:strokeWidth="1dp" />
+
+        <com.google.android.material.button.MaterialButton
+            android:id="@+id/btn_refresh"
+            style="@style/Widget.Material3.Button"
+            android:layout_width="0dp"
+            android:layout_height="48dp"
+            android:layout_marginStart="@dimen/spacing_sm"
+            android:layout_marginEnd="@dimen/spacing_sm"
+            android:layout_weight="1"
+            android:insetTop="0dp"
+            android:insetBottom="0dp"
+            android:text="@string/parking_refresh"
+            android:textColor="@color/parking_prop_text"
+            android:textSize="14sp"
+            android:textStyle="bold"
+            app:backgroundTint="@color/parking_prop_bg"
+            app:cornerRadius="18dp"
+            app:strokeColor="@color/parking_prop_stroke"
+            app:strokeWidth="1dp" />
+
+        <com.google.android.material.button.MaterialButton
+            android:id="@+id/btn_remove"
+            style="@style/Widget.Material3.Button"
+            android:layout_width="0dp"
+            android:layout_height="48dp"
+            android:layout_marginStart="@dimen/spacing_sm"
+            android:layout_weight="1"
+            android:checkable="true"
+            android:insetTop="0dp"
+            android:insetBottom="0dp"
+            android:text="@string/parking_remove"
+            android:textColor="@color/parking_prop_text"
+            android:textSize="14sp"
+            android:textStyle="bold"
+            app:backgroundTint="@color/parking_prop_bg"
+            app:cornerRadius="18dp"
+            app:strokeColor="@color/parking_prop_stroke"
+            app:strokeWidth="1dp" />
+
+    </LinearLayout>
+
+</LinearLayout>

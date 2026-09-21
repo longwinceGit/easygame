@@ -1,13 +1,17 @@
 # 开发者指南
 
-**适用版本**：Game Hub V1　**最后更新**：2026-09-20
+**适用版本**：Game Hub V1.1（已接入第二款游戏）　**最后更新**：2026-09-21
 
 读完本文你将能够：
 
 - 理解代码的分层与依赖规则
 - **在 30 分钟内接入一款新游戏**（不改壳层文件）
-- 调整拖拽方块的数值平衡
+- 调整拖拽方块 / 挪车消消消的数值平衡
 - 知道哪些部分**没有**被验证过
+
+> **ADR-001 已经被真实验证过一次**：`game/parking/` 整包接入时，壳层只改了
+> `GameRegistry` 1 行 + `Constants` 1 个常量 + `nav_graph.xml` 1 个 destination。
+> 下面第 4 节的"接入 4 步"就是照着它走通的，`game/parking/` 是最新、最完整的参考实现。
 
 ---
 
@@ -261,3 +265,52 @@ assertEquals(0, r.gained);
 **Q：为什么 `GamePlugin` 只有 2 个方法？**
 刻意如此。壳真正需要知道的只有"展示什么"和"是否可见"。等第 2 款游戏接入时
 如果确实需要新钩子，那时再加——加方法比删方法安全得多（见 ADR-001）。
+
+---
+
+## 8. 附录：挪车消消消（parking）调参与验证速查
+
+第二款游戏是**最新的参考实现**。它比俄罗斯方块多两样东西，值得新游戏作者抄：
+
+### 8.1 数值都在一处
+
+`game/parking/engine/ParkingConfig.java` —— 棋盘尺寸、接客位数、颜色数、
+道具次数、计分、关卡曲线 `vehicleCount(level)`、生成器上限。
+**改这里就等于改玩法**，其他文件里不允许出现这些数字。
+
+### 8.2 生成即求解（ADR-008）
+
+关卡不是"随机丢车然后祈祷能解"，而是先随机布局，再用 BFS 逐辆求出驶出顺序，
+**把这个顺序当作乘客队列的顺序**——可解是构造出来的，不是检查出来的。
+
+这条有三条硬约束，动生成器前先读 `docs/09-gdd-parking-jam.md` 机制 8：
+
+1. BFS 中**非目标**车最多开到离边界一格，不得到达边界（否则求出的解在真实引擎里复现不了）
+2. 状态编码：每车一个 char 打进 String（早期用 long 打包 6 bit 卡在 9 车，8×8 + 10 车后改为 String），最多 `ParkingConfig.MAX_VEHICLES = 10` 车
+3. `GENERATOR_MAX_BFS_STATES` / `GENERATOR_MAX_ATTEMPTS` 直接决定生成耗时
+
+### 8.3 离线验证（强烈建议照抄）
+
+领域层是纯 Java，所以可以直接这样验证：
+
+```powershell
+$src='app\src\main\java\com\template\app\game\parking'
+$out="$env:TEMP\parking-verify"
+javac -encoding UTF-8 -d $out "$src\model\*.java" "$src\engine\*.java" YourVerify.java
+java -cp $out YourVerify
+```
+
+验证内容：批量生成关卡并证明可解 + fuzz 随机走子并检查引擎不变量
+（车辆不重叠、接客区不超员、乘客数守恒、SOLVED ⟺ 队列为空）。
+**本次交付有三个真实缺陷全靠它抓出来**，详见 `docs/12-code-review-parking-jam.md` 第 2 节。
+
+待办：把这套验证固化成 `src/test/java` 下的 JUnit 用例（需先加
+`testImplementation 'junit:junit:4.13.2'`），目前是临时脚本。
+
+### 8.4 倾斜棋盘的两个坑
+
+`game/parking/view/ParkingGeometry.java`：
+
+- 绘制用 `canvas.rotate(-22°, centerX, centerY)`，**命中测试必须先做一次逆旋转**
+- 驶出动画的终点（接客位）在旋转坐标系之外，所以驶出动画要在屏幕坐标系画
+  —— `ParkingAnimator` 把"棋盘内移动"和"驶出"拆成两组状态就是这个原因

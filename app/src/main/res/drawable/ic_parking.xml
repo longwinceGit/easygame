@@ -1,0 +1,18 @@
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp"
+    android:height="24dp"
+    android:viewportWidth="24"
+    android:viewportHeight="24">
+    <!-- 车身 -->
+    <path
+        android:fillColor="#FFFFFFFF"
+        android:pathData="M4,11h16v7H4z" />
+    <!-- 车顶的向上箭头：表达"车要往上开出去" -->
+    <path
+        android:fillColor="#FFFFFFFF"
+        android:pathData="M12,2l4.5,5.5h-9z" />
+    <!-- 两个轮子 -->
+    <path
+        android:fillColor="#FFFFFFFF"
+        android:pathData="M6,19h3v2H6zM15,19h3v2h-3z" />
+</vector>

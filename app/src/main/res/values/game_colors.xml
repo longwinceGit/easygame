@@ -27,6 +27,31 @@
     <!-- 每款游戏的主题色                                                  -->
     <!-- ================================================================ -->
     <color name="game_tetris_accent">#00838F</color>
+    <color name="game_parking_accent">#EF6C00</color>
+
+    <!-- ================================================================ -->
+    <!-- 挪车消消消画布色（浅色主题）                                        -->
+    <!-- 全部取自 docs/11-ui-spec.md 第 2.2 节                             -->
+    <!-- ================================================================ -->
+    <color name="game_parking_lot_bg">#ECEFF1</color>
+    <color name="game_parking_lot_grid">#CFD8DC</color>
+    <color name="game_parking_lot_frame">#B0BEC5</color>
+    <color name="game_parking_blocker">#90A4AE</color>
+    <color name="game_parking_vehicle_stroke">#455A64</color>
+    <color name="game_parking_arrow_fill">#FFFFFF</color>
+    <color name="game_parking_arrow_outline">#33000000</color>
+    <color name="game_parking_slot_bg">#FFFFFF</color>
+    <color name="game_parking_slot_empty">#B0BEC5</color>
+    <color name="game_parking_queue_bg">#E1E7EA</color>
+    <color name="game_parking_sign_bg">#37474F</color>
+    <color name="game_parking_sign_text">#FFFFFF</color>
+    <color name="game_parking_sign_text_dim">#B3FFFFFF</color>
+    <color name="game_parking_car_shadow">#29000000</color>
+
+    <!-- 道具按钮（黄色胶囊，对应参考截图） -->
+    <color name="parking_prop_bg">#FFC93C</color>
+    <color name="parking_prop_stroke">#E8A200</color>
+    <color name="parking_prop_text">#5D4037</color>
 
     <!-- ================================================================ -->
     <!-- 方块调色板：下标 = TetrominoType.ordinal()                        -->
@@ -39,6 +64,22 @@
         <item>0xFFE5484D</item> <!-- Z 红 -->
         <item>0xFF2D7FF9</item> <!-- J 蓝 -->
         <item>0xFFF76808</item> <!-- L 橙 -->
+    </integer-array>
+
+    <!-- ================================================================ -->
+    <!-- 挪车消消消乘客色板：下标 = Vehicle.colorIndex（8 色）              -->
+    <!-- 浅色车靠 game_parking_vehicle_stroke 描边补偿，                    -->
+    <!-- 箭头用 白填充 + 深描边 双绘保证可辨识                              -->
+    <!-- ================================================================ -->
+    <integer-array name="parking_passenger_colors">
+        <item>0xFFE53935</item> <!-- 0 红 -->
+        <item>0xFF1E88E5</item> <!-- 1 蓝 -->
+        <item>0xFF43A047</item> <!-- 2 绿 -->
+        <item>0xFFFBC02D</item> <!-- 3 黄 -->
+        <item>0xFF8E24AA</item> <!-- 4 紫 -->
+        <item>0xFFEC407A</item> <!-- 5 粉 -->
+        <item>0xFFFB8C00</item> <!-- 6 橙 -->
+        <item>0xFF00ACC1</item> <!-- 7 青 -->
     </integer-array>
 
 </resources>

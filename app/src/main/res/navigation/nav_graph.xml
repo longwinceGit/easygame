@@ -26,4 +26,11 @@
         android:label="@string/tetris_title"
         tools:layout="@layout/fragment_tetris" />
 
+    <!-- 挪车消消消：由 GameRegistry 中的 navDestinationRes 指向这里 -->
+    <fragment
+        android:id="@+id/nav_parking"
+        android:name="com.template.app.game.parking.ui.ParkingFragment"
+        android:label="@string/parking_title"
+        tools:layout="@layout/fragment_parking" />
+
 </navigation>

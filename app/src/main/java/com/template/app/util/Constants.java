@@ -18,6 +18,9 @@ public final class Constants {
     /** 拖拽方块的唯一 ID，同时作为存档表中的 game_id */
     public static final String GAME_ID_TETRIS = "tetris";
 
+    /** 挪车消消消的唯一 ID，同时作为存档表中的 game_id */
+    public static final String GAME_ID_PARKING = "parking";
+
     /** 战绩页展示的最近对局条数 */
     public static final int RECENT_RECORD_LIMIT = 20;
 }

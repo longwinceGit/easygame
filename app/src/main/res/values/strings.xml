@@ -34,6 +34,53 @@
     <string name="tetris_popup_tetris">四连消!</string>
     <string name="tetris_board_description">拖拽方块游戏棋盘，从下方托盘拖出方块放置到棋盘上</string>
 
+    <!-- 挪车消消消 -->
+    <string name="parking_title">挪车消消消</string>
+    <string name="parking_subtitle">挪开障碍，接走乘客</string>
+    <string name="parking_label_level">关卡</string>
+    <string name="parking_label_left">剩余</string>
+    <string name="parking_label_score">分数</string>
+    <string name="parking_label_best">最高分</string>
+    <string name="parking_undo">撤销</string>
+    <string name="parking_refresh">刷新</string>
+    <string name="parking_sort">排序</string>
+    <string name="parking_sort_count">排序 ×%1$d</string>
+    <string name="parking_sort_exhausted_msg">本关的「排序」已经用完了</string>
+    <string name="parking_sort_useless">队列里没有可以重排的乘客</string>
+    <string name="parking_remove">移除</string>
+    <string name="parking_remove_count">移除 ×%1$d</string>
+    <string name="parking_remove_hint">点击一辆碍事的车，把它拖走（它的乘客也会一并离开）</string>
+    <string name="parking_remove_failed">这里没有可以移除的车</string>
+    <string name="parking_remove_exhausted_msg">本关的「移除」已经用完了</string>
+    <string name="parking_level_title">第 %1$d 关</string>
+    <string name="parking_cannot_move">这辆车被挡住了，先把挡路的车挪开</string>
+    <string name="parking_pickup_full">接客区已满，先接走队首乘客，或撤销一步</string>
+    <string name="parking_solved_title">第 %1$d 关完成</string>
+    <string name="parking_solved_message">接走 %1$d 位乘客 · 累计 %2$d 分 · 历史最高 %3$d 分</string>
+    <string name="parking_next_level">下一关</string>
+    <string name="parking_back_to_hub">返回大厅</string>
+    <string name="parking_stuck_title">卡住了</string>
+    <string name="parking_stuck_message">停车场里已经没有能动的车了</string>
+    <string name="parking_stuck_undo">撤销一步</string>
+    <string name="parking_stuck_refresh">刷新本关</string>
+    <string name="parking_hint">点击车辆，它会沿箭头开到底并驶出停车场。先挪开挡路的车，让队首颜色的车先出去</string>
+    <string name="parking_board_description">挪车消消消棋盘：上方是乘客队列与接客区，下方是停车场</string>
+    <string name="parking_announce_boarded">接走 %1$d 位乘客</string>
+    <string name="parking_announce_parked">车辆驶入接客区，剩余 %1$d 个车位</string>
+    <string name="parking_announce_front">队首是 %1$d 位%2$s色乘客</string>
+    <string name="parking_announce_state">第 %1$d 关，还剩 %2$d 位乘客，接客区剩余 %3$d 个车位。%4$s</string>
+
+    <string-array name="parking_color_names">
+        <item>红</item>
+        <item>蓝</item>
+        <item>绿</item>
+        <item>黄</item>
+        <item>紫</item>
+        <item>粉</item>
+        <item>橙</item>
+        <item>青</item>
+    </string-array>
+
     <!-- 战绩 -->
     <string name="records_best_title">最佳成绩</string>
     <string name="records_recent_title">最近对局</string>

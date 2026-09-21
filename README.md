@@ -1,6 +1,7 @@
 # easygame
 
-> 一个 Android 游戏合集。当前内置 **拖拽方块**（可拖拽的俄罗斯方块），
+> 一个 Android 游戏合集。当前内置两款游戏：
+> **拖拽方块**（可拖拽的俄罗斯方块）和 **挪车消消消**（颜色匹配 + 华容道式挪车解谜），
 > 架构已为接入更多游戏做好准备。
 
 ---
@@ -102,6 +103,26 @@ gradlew.bat assembleDebug        # Windows
 
 ---
 
+## 挪车消消消
+
+停车场被塞满了，上方有一排彩色小人在等车。
+点一辆车，它会沿车头箭头一路开到底，开出边界就驶入顶部接客区；
+颜色和队首乘客一致就接人离开，不一致就占一个车位等着——而车位只有 4 个。
+
+| 操作 | 手势 |
+|------|------|
+| 移动车辆 | **点击** = 沿箭头滑到底（贴边即驶出）；**按住拖动** = 沿车身轴向精确停位（可反向） |
+| 排序 ×1 | 把剩余乘客按颜色聚成一团，方便连续接客 |
+| 刷新 | 重新随机生成本关 |
+| 移除 ×1 | 点掉一辆碍事的车，它的乘客也会一并离开 |
+| 撤销 | 无限次，悔棋不用钱 |
+
+**没有时间压力**：车辆不会自己动，你可以慢慢想。卡住了就撤销或刷新，不用重开整个进度。
+
+关卡由程序生成，并且**在生成时就被求解器证明可解**——不存在"随机出来的死局"。
+
+---
+
 ## 架构
 
 ```
@@ -147,12 +168,20 @@ androidTemplete/
     │   │   ├── GameDescriptor.java               #   游戏元信息（不可变）
     │   │   └── GameRegistry.java                 #   注册表 ← 新增游戏改这里
     │   │
-    │   └── tetris/                               # 【游戏 1】自包含插件包
-    │       ├── model/                            #   纯 Java：方块、棋盘
-    │       ├── engine/                           #   纯 Java：状态机、计分、7-bag
-    │       ├── view/TetrisView.java              #   Canvas 渲染 + 拖拽手势
+    │   ├── tetris/                               # 【游戏 1】自包含插件包
+    │   │   ├── model/                            #   纯 Java：方块、棋盘
+    │   │   ├── engine/                           #   纯 Java：状态机、计分、7-bag
+    │   │   ├── view/TetrisView.java              #   Canvas 渲染 + 拖拽手势
+    │   │   ├── ui/                               #   Fragment + ViewModel
+    │   │   └── TetrisGamePlugin.java             #   注册入口
+    │   │
+    │   └── parking/                              # 【游戏 2】挪车消消消，与 tetris 平级、零依赖
+    │       ├── model/                            #   纯 Java：车辆、方向、乘客组、关卡
+    │       ├── engine/                           #   纯 Java：状态机、移动/驶出/接客、撤销、
+    │       │                                     #   关卡生成 + BFS 可解性证明
+    │       ├── view/                             #   倾斜棋盘渲染 + 手势 + 驶出动画
     │       ├── ui/                               #   Fragment + ViewModel
-    │       └── TetrisGamePlugin.java             #   注册入口
+    │       └── ParkingGamePlugin.java            #   注册入口
     │
     ├── data/                                     # 【基础设施】Room 成绩存档
     └── ui/
@@ -172,6 +201,11 @@ androidTemplete/
 | `docs/04-ui-spec.md` | UI 规格：色板、布局尺寸、无障碍要求 | 设计 / 开发 |
 | `docs/06-code-review.md` | 代码审查报告、遗留问题与冒烟清单 | 开发 |
 | **`docs/07-dev-guide.md`** | **开发者指南：新增游戏的完整步骤、调参、验证清单** | **开发** |
+| `docs/08-prd-parking-jam.md` | 挪车消消消：产品需求、目标指标、不做的事 | 产品 / 全体 |
+| `docs/09-gdd-parking-jam.md` | 挪车消消消：机制规格、关卡生成算法、动画规格 | 设计 / 开发 |
+| `docs/10-architecture-parking-jam.md` | 挪车消消消：增量架构、ADR-007~010、适应度函数 | 开发 |
+| `docs/11-ui-spec-parking-jam.md` | 挪车消消消：倾斜棋盘、车辆立体感、色板、动画 | 设计 / 开发 |
+| `docs/12-code-review-parking-jam.md` | 挪车消消消：审查报告、被测试抓出的缺陷、冒烟清单 | 开发 |
 
 ---
 

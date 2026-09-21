@@ -1,0 +1,585 @@
+package com.template.app.game.parking.view;
+
+import android.content.Context;
+import android.graphics.Canvas;
+import android.graphics.DashPathEffect;
+import android.graphics.Paint;
+import android.graphics.Path;
+import android.graphics.RectF;
+import android.os.SystemClock;
+
+import androidx.core.content.ContextCompat;
+import androidx.core.graphics.ColorUtils;
+
+import com.template.app.R;
+import com.template.app.game.parking.engine.ParkingConfig;
+import com.template.app.game.parking.engine.ParkingEngine;
+import com.template.app.game.parking.model.Direction;
+import com.template.app.game.parking.model.PassengerGroup;
+import com.template.app.game.parking.model.Vehicle;
+
+/**
+ * 全部绘制与动画计时。
+ * <p>
+ * 视觉基调来自参考截图：明快的卡通配色、<b>倾斜的菱形车场</b>、
+ * 带投影和车顶高光的俯视车辆、顶部一排彩色小人 + "N LEFT" 计数牌 + 虚线接客位。
+ * <p>
+ * <b>性能约定</b>：{@code onDraw} 内零对象分配——所有 {@link Paint} / {@link RectF} /
+ * {@link Path} 都是预分配字段并复用；颜色全部来自资源，Java 中不出现色值字面量。
+ */
+class ParkingRenderer {
+
+    /** 乘客队列最多画多少个头像，超出的用 "+N" 表示。关卡越深乘客越多，靠 "+N" 兜底。 */
+    private static final int MAX_PASSENGER_ICONS = 16;
+
+    private final ParkingGeometry geometry;
+    private final int[] passengerColors;
+    private final int accentColor;
+
+    private final Paint platformPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
+    private final Paint signPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
+    private final Paint signTextPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
+    private final Paint signCaptionPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
+    private final Paint passengerPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
+    private final Paint overflowPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
+    private final Paint slotPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
+    private final Paint slotDashPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
+    private final Paint groundPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
+    private final Paint gridPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
+    private final Paint framePaint = new Paint(Paint.ANTI_ALIAS_FLAG);
+    private final Paint shadowPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
+    private final Paint fillPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
+    private final Paint roofPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
+    private final Paint glassPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
+    private final Paint strokePaint = new Paint(Paint.ANTI_ALIAS_FLAG);
+    private final Paint arrowFillPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
+    private final Paint arrowOutlinePaint = new Paint(Paint.ANTI_ALIAS_FLAG);
+    private final Paint accentPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
+    private final Paint popupPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
+
+    private final RectF rect = new RectF();
+    private final RectF inner = new RectF();
+    private final Path arrowPath = new Path();
+    private final DashPathEffect dash;
+
+    ParkingRenderer(Context context, ParkingGeometry geometry) {
+        this.geometry = geometry;
+        this.passengerColors = context.getResources().getIntArray(R.array.parking_passenger_colors);
+        this.accentColor = ContextCompat.getColor(context, R.color.game_parking_accent);
+
+        float density = geometry.density;
+        float dashSize = 4f * density;
+        this.dash = new DashPathEffect(new float[]{dashSize, dashSize}, 0f);
+
+        platformPaint.setStyle(Paint.Style.FILL);
+        platformPaint.setColor(ContextCompat.getColor(context, R.color.game_parking_queue_bg));
+
+        signPaint.setStyle(Paint.Style.FILL);
+        signPaint.setColor(ContextCompat.getColor(context, R.color.game_parking_sign_bg));
+
+        signTextPaint.setColor(ContextCompat.getColor(context, R.color.game_parking_sign_text));
+        signTextPaint.setTextAlign(Paint.Align.CENTER);
+        signTextPaint.setTextSize(17f * density);
+        signTextPaint.setFakeBoldText(true);
+
+        signCaptionPaint.setColor(ContextCompat.getColor(context, R.color.game_parking_sign_text_dim));
+        signCaptionPaint.setTextAlign(Paint.Align.CENTER);
+        signCaptionPaint.setTextSize(8f * density);
+        signCaptionPaint.setFakeBoldText(true);
+
+        overflowPaint.setColor(ContextCompat.getColor(context, R.color.game_parking_sign_text_dim));
+        overflowPaint.setTextAlign(Paint.Align.LEFT);
+        overflowPaint.setTextSize(12f * density);
+        overflowPaint.setFakeBoldText(true);
+
+        slotPaint.setStyle(Paint.Style.FILL);
+        slotPaint.setColor(ContextCompat.getColor(context, R.color.game_parking_slot_bg));
+
+        slotDashPaint.setStyle(Paint.Style.STROKE);
+        slotDashPaint.setStrokeWidth(1.5f * density);
+        slotDashPaint.setColor(ContextCompat.getColor(context, R.color.game_parking_slot_empty));
+        slotDashPaint.setPathEffect(dash);
+
+        groundPaint.setStyle(Paint.Style.FILL);
+        groundPaint.setColor(ContextCompat.getColor(context, R.color.game_parking_lot_bg));
+
+        gridPaint.setStyle(Paint.Style.STROKE);
+        gridPaint.setStrokeWidth(1f * density);
+        gridPaint.setColor(ContextCompat.getColor(context, R.color.game_parking_lot_grid));
+
+        framePaint.setStyle(Paint.Style.STROKE);
+        framePaint.setStrokeWidth(1.5f * density);
+        framePaint.setColor(ContextCompat.getColor(context, R.color.game_parking_lot_frame));
+
+        shadowPaint.setStyle(Paint.Style.FILL);
+        shadowPaint.setColor(ContextCompat.getColor(context, R.color.game_parking_car_shadow));
+
+        fillPaint.setStyle(Paint.Style.FILL);
+        roofPaint.setStyle(Paint.Style.FILL);
+        glassPaint.setStyle(Paint.Style.FILL);
+        strokePaint.setStyle(Paint.Style.STROKE);
+        strokePaint.setStrokeWidth(1.2f * density);
+        strokePaint.setColor(ContextCompat.getColor(context, R.color.game_parking_vehicle_stroke));
+
+        arrowFillPaint.setStyle(Paint.Style.FILL);
+        arrowFillPaint.setColor(ContextCompat.getColor(context, R.color.game_parking_arrow_fill));
+        arrowOutlinePaint.setStyle(Paint.Style.STROKE);
+        arrowOutlinePaint.setStrokeWidth(1.6f * density);
+        arrowOutlinePaint.setColor(ContextCompat.getColor(context, R.color.game_parking_arrow_outline));
+
+        accentPaint.setStyle(Paint.Style.STROKE);
+        accentPaint.setStrokeWidth(2.5f * density);
+        accentPaint.setColor(accentColor);
+
+        popupPaint.setColor(accentColor);
+        popupPaint.setTextAlign(Paint.Align.CENTER);
+        popupPaint.setTextSize(16f * density);
+        popupPaint.setFakeBoldText(true);
+    }
+
+    // ==================================================================
+    // 入口
+    // ==================================================================
+
+    void draw(Canvas canvas, ParkingEngine engine, ParkingAnimator anim, boolean removeMode) {
+        long now = SystemClock.uptimeMillis();
+        if (!anim.isMoveAnimating(now)) {
+            anim.clearMove();
+        }
+        if (!anim.isExitAnimating(now)) {
+            anim.clearExit();
+        }
+        anim.tickChoreography(now);
+        drawQueue(canvas, engine, anim, now);
+        drawPickup(canvas, engine, anim);
+        drawGround(canvas);
+        drawVehicles(canvas, engine, anim, removeMode);
+        drawExitingVehicle(canvas, anim, now);
+        drawBoardingCar(canvas, anim, now);
+        drawPopup(canvas, anim, now);
+    }
+
+    boolean isAnimating(ParkingAnimator anim) {
+        return anim.isAnimating(SystemClock.uptimeMillis());
+    }
+
+    // ==================================================================
+    // 乘客队列
+    // ==================================================================
+
+    private void drawQueue(Canvas canvas, ParkingEngine engine, ParkingAnimator anim, long now) {
+        float top = geometry.queueTop;
+        float height = geometry.queueHeight;
+        float radius = 12f * geometry.density;
+        rect.set(geometry.stripLeft, top, geometry.stripLeft + geometry.stripWidth, top + height);
+        canvas.drawRoundRect(rect, radius, radius, platformPaint);
+
+        // 左侧的 "N LEFT" 计数牌
+        float signWidth = 54f * geometry.density;
+        float signLeft = geometry.stripLeft + 6f * geometry.density;
+        rect.set(signLeft, top + 6f * geometry.density,
+            signLeft + signWidth, top + height - 6f * geometry.density);
+        canvas.drawRoundRect(rect, 8f * geometry.density, 8f * geometry.density, signPaint);
+        float signCenterX = rect.centerX();
+        canvas.drawText(String.valueOf(engine.getPassengersLeft()), signCenterX,
+            rect.centerY() - 1f * geometry.density, signTextPaint);
+        canvas.drawText("LEFT", signCenterX, rect.bottom - 5f * geometry.density, signCaptionPaint);
+
+        // 乘客：圆头 + 彩色身体，同色成团
+        float icon = (height - 16f * geometry.density) * 0.62f;
+        float step = icon + 3f * geometry.density;
+        float groupGap = 9f * geometry.density;
+        float baseline = top + height * 0.56f;
+        float x = signLeft + signWidth + 10f * geometry.density;
+
+        int drawn = 0;
+        int frontDrawn = 0;
+        for (int i = 0; i < engine.queueSize() && drawn < MAX_PASSENGER_ICONS; i++) {
+            PassengerGroup group = engine.queueGroupAt(i);
+            int before = drawn;
+            for (int k = 0; k < group.count && drawn < MAX_PASSENGER_ICONS; k++) {
+                passengerPaint.setColor(passengerColors[group.colorIndex]);
+                drawPassenger(canvas, x, baseline, icon);
+                x += step;
+                drawn++;
+            }
+            if (i == 0) {
+                frontDrawn = drawn - before;
+            }
+            x += groupGap;
+        }
+
+        // 队首高亮：明确"现在要接的是它"
+        if (frontDrawn > 0) {
+            float startX = signLeft + signWidth + 10f * geometry.density;
+            float lineY = top + height - 5f * geometry.density;
+            canvas.drawLine(startX, lineY, startX + frontDrawn * step, lineY, accentPaint);
+        }
+
+        // 正在上客的车：把"还没上车的乘客"作为半透明小人留在队尾，一个个被接走
+        if (anim.isBoardingActive() && !anim.isLeaving(now)) {
+            int pending = anim.boardCount() - anim.boardedSoFar(now);
+            if (pending > 0) {
+                passengerPaint.setColor(passengerColors[anim.boardColorIndex()]);
+                passengerPaint.setAlpha(178);
+                float gx = Math.min(x + groupGap,
+                    geometry.stripLeft + geometry.stripWidth - icon - 4f * geometry.density);
+                for (int k = 0; k < pending; k++) {
+                    drawPassenger(canvas, gx, baseline, icon);
+                    gx += step;
+                    if (gx > geometry.stripLeft + geometry.stripWidth - icon) {
+                        break;
+                    }
+                }
+                passengerPaint.setAlpha(255);
+            }
+        }
+
+        int remaining = engine.getPassengersLeft() - drawn;
+        if (remaining > 0) {
+            canvas.drawText("+" + remaining, Math.min(x,
+                    geometry.stripLeft + geometry.stripWidth - 22f * geometry.density),
+                baseline + icon * 0.3f, overflowPaint);
+        }
+    }
+
+    /** 一个乘客：圆头 + 圆角身体，同色成团；形状与颜色无关，去色后依然可数。 */
+    private void drawPassenger(Canvas canvas, float left, float baseline, float size) {
+        float radius = size * 0.5f;
+        canvas.drawCircle(left + radius, baseline - radius * 0.95f, radius * 0.42f, passengerPaint);
+        rect.set(left + radius * 0.24f, baseline - radius * 0.5f,
+            left + size - radius * 0.24f, baseline + radius * 0.8f);
+        canvas.drawRoundRect(rect, radius * 0.45f, radius * 0.45f, passengerPaint);
+    }
+
+    // ==================================================================
+    // 接客区
+    // ==================================================================
+
+    private void drawPickup(Canvas canvas, ParkingEngine engine, ParkingAnimator anim) {
+        float top = geometry.pickupTop;
+        float height = geometry.pickupHeight;
+        float radius = 10f * geometry.density;
+        int exitVehicleId = anim.exitVehicle == null ? -1 : anim.exitVehicle.id;
+
+        for (int i = 0; i < ParkingConfig.PICKUP_SLOTS; i++) {
+            float left = geometry.slotLeft(i);
+            rect.set(left, top, left + geometry.slotWidth, top + height);
+            canvas.drawRoundRect(rect, radius, radius, slotPaint);
+            canvas.drawRoundRect(rect, radius, radius, slotDashPaint);
+        }
+
+        int slot = 0;
+        for (int i = 0; i < engine.vehicleCount() && slot < ParkingConfig.PICKUP_SLOTS; i++) {
+            Vehicle v = engine.vehicleAt(i);
+            if (!v.inPickup() || v.id == exitVehicleId) {
+                continue;
+            }
+            float left = geometry.slotLeft(slot);
+            float centerX = left + geometry.slotWidth / 2f;
+            float centerY = top + height / 2f;
+            drawCarShape(canvas, Direction.RIGHT, v.colorIndex, centerX, centerY,
+                0f, 1f, 1f, geometry.slotWidth * 0.8f, height * 0.5f);
+            slot++;
+        }
+    }
+
+    // ==================================================================
+    // 停车场（倾斜）
+    // ==================================================================
+
+    private void drawGround(Canvas canvas) {
+        canvas.save();
+        canvas.rotate(ParkingGeometry.ROTATION_DEGREES, geometry.centerX, geometry.centerY);
+        float radius = 16f * geometry.density;
+        rect.set(geometry.boardLeft, geometry.boardTop,
+            geometry.boardLeft + geometry.boardWidth(),
+            geometry.boardTop + geometry.boardHeight());
+        canvas.drawRoundRect(rect, radius, radius, groundPaint);
+        canvas.drawRoundRect(rect, radius, radius, framePaint);
+
+        for (int c = 1; c < ParkingConfig.COLUMNS; c++) {
+            float x = geometry.vehicleLeft(c);
+            canvas.drawLine(x, geometry.boardTop, x,
+                geometry.boardTop + geometry.boardHeight(), gridPaint);
+        }
+        for (int r = 1; r < ParkingConfig.ROWS; r++) {
+            float y = geometry.vehicleTop(r);
+            canvas.drawLine(geometry.boardLeft, y,
+                geometry.boardLeft + geometry.boardWidth(), y, gridPaint);
+        }
+        canvas.restore();
+    }
+
+    private void drawVehicles(Canvas canvas, ParkingEngine engine,
+                              ParkingAnimator anim, boolean removeMode) {
+        for (int i = 0; i < engine.vehicleCount(); i++) {
+            Vehicle v = engine.vehicleAt(i);
+            if (!v.inLot() || anim.moveVehicleId() == v.id) {
+                continue;
+            }
+            float row = v.row;
+            float col = v.col;
+            if (anim.dragging && anim.dragVehicleId == v.id) {
+                row += anim.dragCells * v.direction.dRow;
+                col += anim.dragCells * v.direction.dCol;
+            }
+            geometry.vehicleScreenCenter(row, col, v.length, v.horizontal);
+            drawCarShape(canvas, v.direction, v.colorIndex,
+                geometry.tmpX, geometry.tmpY, ParkingGeometry.ROTATION_DEGREES, 1f,
+                removeMode ? 1.06f : 1f,
+                geometry.vehicleWidth(v.length, v.horizontal),
+                geometry.vehicleHeight(v.length, v.horizontal));
+        }
+    }
+
+    /**
+     * 驶出动画：车先沿车头方向冲出场地（途经点），再拐进接客位，
+     * 同时车身从棋盘倾角转正——"车开走了"的关键观感。
+     */
+    private void drawExitingVehicle(Canvas canvas, ParkingAnimator anim, long now) {
+        if (anim.exitVehicle == null) {
+            return;
+        }
+        float progress = Math.min(1f, (now - anim.exitStart) / (float) ParkingAnimator.EXIT_DURATION_MS);
+        float eased = easeInOutCubic(progress);
+        float inverse = 1f - eased;
+
+        // 二次贝塞尔：起点 S → 途经点 C（冲出场地）→ 终点 E（接客位）
+        float x = inverse * inverse * anim.exitFromX
+            + 2f * inverse * eased * anim.exitFromX2
+            + eased * eased * anim.exitToX;
+        float y = inverse * inverse * anim.exitFromY
+            + 2f * inverse * eased * anim.exitFromY2
+            + eased * eased * anim.exitToY;
+        float angle = anim.exitFromAngle * (1f - eased);
+        float alpha = anim.exitParked ? 1f : (progress < 0.55f ? 1f : 1f - (progress - 0.55f) / 0.45f);
+
+        Vehicle v = anim.exitVehicle;
+        drawCarShape(canvas, v.direction, v.colorIndex, x, y, angle, alpha, 1f,
+            geometry.vehicleWidth(v.length, v.horizontal),
+            geometry.vehicleHeight(v.length, v.horizontal));
+    }
+
+    /**
+     * 接客离场编排的当前车：先在上客点"乘客逐个上车"（车里的小人一个个多起来），
+     * 再"一辆辆开走"（驶向屏幕外并转正淡出）。
+     * <p>
+     * 引擎里这辆车早已是 {@code GONE}，这里完全由动画状态机驱动，是一个"影子"实体。
+     */
+    private void drawBoardingCar(Canvas canvas, ParkingAnimator anim, long now) {
+        if (!anim.isBoardingActive()) {
+            return;
+        }
+        boolean leaving = anim.isLeaving(now);
+        float progress = leaving ? anim.leaveProgress(now) : 0f;
+        float eased = easeInOutCubic(progress);
+
+        float x = leaving
+            ? lerp(anim.boardSpotX(), anim.boardLeaveX(), eased)
+            : anim.boardSpotX();
+        float y = leaving
+            ? lerp(anim.boardSpotY(), anim.boardLeaveY(), eased)
+            : anim.boardSpotY();
+        float angle = leaving
+            ? lerp(anim.boardSpotAngle(), anim.boardLeaveAngle(), eased)
+            : anim.boardSpotAngle();
+        float alpha = leaving ? (progress < 0.6f ? 1f : 1f - (progress - 0.6f) / 0.4f) : 1f;
+
+        drawCarShape(canvas, anim.boardDirection(), anim.boardColorIndex(), x, y,
+            angle, alpha, 1f, anim.boardWidth(), anim.boardHeight());
+
+        // 已上车的乘客：车内沿长轴排开的小人
+        int aboard = anim.boardedSoFar(now);
+        if (aboard > 0) {
+            drawPassengersInCar(canvas, x, y, angle, aboard,
+                anim.boardWidth(), anim.boardHeight());
+        }
+    }
+
+    /** 在车厢内沿长轴画 count 个白色小人，表示已上车的乘客。 */
+    private void drawPassengersInCar(Canvas canvas, float cx, float cy, float angle,
+                                     int count, float width, float height) {
+        canvas.save();
+        canvas.rotate(angle, cx, cy);
+        boolean horizontal = width >= height;
+        float span = (horizontal ? width : height) * 0.46f;
+        float r = Math.min(width, height) * 0.13f;
+        passengerPaint.setColor(0xFFFFFFFF);
+        passengerPaint.setAlpha(235);
+        for (int i = 0; i < count; i++) {
+            float t = count == 1 ? 0f : (i / (float) (count - 1) - 0.5f);
+            float px = cx + (horizontal ? t * span : 0f);
+            float py = cy + (horizontal ? 0f : t * span);
+            canvas.drawCircle(px, py, r, passengerPaint);
+        }
+        passengerPaint.setAlpha(255);
+        canvas.restore();
+    }
+
+    private static float lerp(float a, float b, float t) {
+        return a + (b - a) * t;
+    }
+
+    // ==================================================================
+    // 车辆
+    // ==================================================================
+
+    /**
+     * 画一辆车：投影 + 车身 + 车顶高光 + 前挡风 + 描边 + 白色箭头。
+     * 以 (centerX, centerY) 为中心，整体旋转 angleDegrees。
+     *
+     * @param width  车身总宽（横向车 = 长，竖直车 = 短）
+     * @param height 车身总高
+     */
+    private void drawCarShape(Canvas canvas, Direction direction, int colorIndex,
+                              float centerX, float centerY, float angleDegrees,
+                              float alpha, float scale, float width, float height) {
+        float inset = ParkingGeometry.VEHICLE_INSET_DP * geometry.density;
+        float bodyWidth = (width - inset * 2f) * scale;
+        float bodyHeight = (height - inset * 2f) * scale;
+        float left = centerX - bodyWidth / 2f;
+        float top = centerY - bodyHeight / 2f;
+        float radius = Math.min(bodyWidth, bodyHeight) * 0.3f;
+
+        int color = passengerColors[colorIndex];
+
+        canvas.save();
+        canvas.rotate(angleDegrees, centerX, centerY);
+
+        // 投影：往右下偏一点，给车辆"放在地上"的体积感
+        float shadowDrop = 3f * geometry.density * scale;
+        rect.set(left + shadowDrop * 0.6f, top + shadowDrop,
+            left + bodyWidth + shadowDrop * 0.6f, top + bodyHeight + shadowDrop);
+        shadowPaint.setAlpha((int) (255f * alpha));
+        canvas.drawRoundRect(rect, radius, radius, shadowPaint);
+
+        // 车身
+        rect.set(left, top, left + bodyWidth, top + bodyHeight);
+        fillPaint.setColor(color);
+        fillPaint.setAlpha((int) (255f * alpha));
+        canvas.drawRoundRect(rect, radius, radius, fillPaint);
+
+        // 沿车身长轴的量 / 短轴的量
+        boolean horizontal = bodyWidth >= bodyHeight;
+        float along = horizontal ? bodyWidth : bodyHeight;
+        float across = horizontal ? bodyHeight : bodyWidth;
+        float sign = forwardSign(direction);
+        float roofAlong = along * 0.60f;
+        float roofAcross = across * 0.64f;
+        float roofStart = sign >= 0 ? along - roofAlong : 0f;
+
+        // 车顶高光：往车头方向偏移的浅色块，形成顶光
+        roofPaint.setColor(ColorUtils.blendARGB(color, 0xFFFFFFFF, 0.30f));
+        roofPaint.setAlpha((int) (235f * alpha));
+        placeAlong(horizontal, left, top, across, roofStart, roofAlong, roofAcross);
+        canvas.drawRoundRect(inner, radius * 0.7f, radius * 0.7f, roofPaint);
+
+        // 前挡风：车顶靠车头一侧的深色横带，读出"车头在哪"
+        glassPaint.setColor(ColorUtils.blendARGB(color, 0xFF000000, 0.32f));
+        glassPaint.setAlpha((int) (220f * alpha));
+        float bandAlong = along * 0.14f;
+        float bandStart = sign >= 0
+            ? Math.max(0f, roofStart - bandAlong * 1.1f)
+            : Math.min(along - bandAlong, roofAlong + bandAlong * 0.1f);
+        placeAlong(horizontal, left, top, across, bandStart, bandAlong, across * 0.74f);
+        canvas.drawRoundRect(inner, bandAlong * 0.35f, bandAlong * 0.35f, glassPaint);
+
+        // 描边
+        strokePaint.setAlpha((int) (255f * alpha));
+        rect.set(left, top, left + bodyWidth, top + bodyHeight);
+        canvas.drawRoundRect(rect, radius, radius, strokePaint);
+
+        // 方向箭头：白填充 + 深描边双绘，保证在任意色块上可辨识
+        float size = Math.min(bodyWidth, bodyHeight) * 0.46f;
+        drawArrow(canvas, centerX, centerY, size, direction, alpha);
+
+        fillPaint.setAlpha(255);
+        roofPaint.setAlpha(255);
+        glassPaint.setAlpha(255);
+        strokePaint.setAlpha(255);
+        shadowPaint.setAlpha(255);
+        canvas.restore();
+    }
+
+    /** 在 (left, top) 起点的车身矩形内，沿长轴放置一个 [start, start+alongSize] 的子矩形。 */
+    private void placeAlong(boolean horizontal, float left, float top,
+                            float across, float start, float alongSize, float acrossSize) {
+        if (horizontal) {
+            inner.set(left + start, top + (across - acrossSize) / 2f,
+                left + start + alongSize, top + (across + acrossSize) / 2f);
+        } else {
+            inner.set(left + (across - acrossSize) / 2f, top + start,
+                left + (across + acrossSize) / 2f, top + start + alongSize);
+        }
+    }
+
+    /** 车顶高光往车头方向偏移：+1 = 朝正方向，-1 = 朝负方向。 */
+    private static float forwardSign(Direction direction) {
+        return (direction.dRow + direction.dCol) >= 0 ? 1f : -1f;
+    }
+
+    /**
+     * 画方向箭头：白色填充 + 深色描边双绘。
+     * <p>
+     * 双绘是为了浅色车（如琥珀、黄）——描边保证白箭头在任何色块上都可辨识。
+     */
+    private void drawArrow(Canvas canvas, float cx, float cy, float size,
+                           Direction direction, float alpha) {
+        canvas.save();
+        canvas.rotate(direction.arrowDegrees(), cx, cy);
+        arrowPath.rewind();
+
+        float shaft = size * 0.11f;
+        arrowPath.moveTo(cx - shaft, cy + size * 0.5f);
+        arrowPath.lineTo(cx - shaft, cy - size * 0.05f);
+        arrowPath.lineTo(cx + shaft, cy - size * 0.05f);
+        arrowPath.lineTo(cx + shaft, cy + size * 0.5f);
+        arrowPath.close();
+
+        arrowPath.moveTo(cx - size * 0.3f, cy - size * 0.02f);
+        arrowPath.lineTo(cx, cy - size * 0.48f);
+        arrowPath.lineTo(cx + size * 0.3f, cy - size * 0.02f);
+        arrowPath.close();
+
+        arrowFillPaint.setAlpha((int) (255f * alpha));
+        arrowOutlinePaint.setAlpha((int) (255f * alpha));
+        canvas.drawPath(arrowPath, arrowFillPaint);
+        canvas.drawPath(arrowPath, arrowOutlinePaint);
+        arrowFillPaint.setAlpha(255);
+        arrowOutlinePaint.setAlpha(255);
+        canvas.restore();
+    }
+
+    // ==================================================================
+    // 接客浮字
+    // ==================================================================
+
+    private void drawPopup(Canvas canvas, ParkingAnimator anim, long now) {
+        if (!anim.isPopupAnimating(now)) {
+            return;
+        }
+        float progress = (now - anim.popupStart) / (float) ParkingAnimator.POPUP_DURATION_MS;
+        float alpha = Math.max(0f, 1f - progress);
+        float rise = 26f * geometry.density * easeOutCubic(progress);
+        popupPaint.setAlpha((int) (255f * alpha));
+        canvas.drawText("+" + anim.popupValue,
+            geometry.stripLeft + geometry.stripWidth / 2f,
+            geometry.pickupTop + geometry.pickupHeight * 0.62f - rise,
+            popupPaint);
+        popupPaint.setAlpha(255);
+    }
+
+    // ==================================================================
+    // 工具
+    // ==================================================================
+
+    private static float easeOutCubic(float t) {
+        float inverse = 1f - t;
+        return 1f - inverse * inverse * inverse;
+    }
+
+    private static float easeInOutCubic(float t) {
+        return t < 0.5f ? 4f * t * t * t : 1f - (float) Math.pow(-2f * t + 2f, 3f) / 2f;
+    }
+}

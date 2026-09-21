@@ -3,6 +3,7 @@ package com.template.app.game.core;
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 
+import com.template.app.game.parking.ParkingGamePlugin;
 import com.template.app.game.tetris.TetrisGamePlugin;
 
 import java.util.ArrayList;
@@ -28,6 +29,7 @@ public final class GameRegistry {
     static {
         // ---- 在此注册游戏（新增游戏只加这一行）----
         register(new TetrisGamePlugin());
+        register(new ParkingGamePlugin());
     }
 
     private GameRegistry() {

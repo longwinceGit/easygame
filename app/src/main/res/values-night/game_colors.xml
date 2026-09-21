@@ -22,6 +22,28 @@
     <color name="game_piece_stroke_amber">#8D6E00</color>
 
     <color name="game_tetris_accent">#4DD0E1</color>
+    <color name="game_parking_accent">#FFB74D</color>
+
+    <!-- 挪车消消消画布色（暗色主题） -->
+    <color name="game_parking_lot_bg">#232323</color>
+    <color name="game_parking_lot_grid">#3A3A3A</color>
+    <color name="game_parking_lot_frame">#4A4A4A</color>
+    <color name="game_parking_blocker">#78909C</color>
+    <color name="game_parking_vehicle_stroke">#263238</color>
+    <color name="game_parking_arrow_fill">#FFFFFF</color>
+    <color name="game_parking_arrow_outline">#4D000000</color>
+    <color name="game_parking_slot_bg">#2C2C2C</color>
+    <color name="game_parking_slot_empty">#5A5A5A</color>
+    <color name="game_parking_queue_bg">#1B1B1B</color>
+    <color name="game_parking_sign_bg">#263238</color>
+    <color name="game_parking_sign_text">#FFFFFF</color>
+    <color name="game_parking_sign_text_dim">#B3FFFFFF</color>
+    <color name="game_parking_car_shadow">#40000000</color>
+
+    <!-- 道具按钮（暗色主题） -->
+    <color name="parking_prop_bg">#FFD54F</color>
+    <color name="parking_prop_stroke">#E0A800</color>
+    <color name="parking_prop_text">#4E342E</color>
 
     <integer-array name="tetris_piece_colors">
         <item>0xFF4DD0E1</item> <!-- I -->
@@ -31,6 +53,17 @@
         <item>0xFFEF5350</item> <!-- Z -->
         <item>0xFF64B5F6</item> <!-- J -->
         <item>0xFFFFA726</item> <!-- L -->
+    </integer-array>
+
+    <integer-array name="parking_passenger_colors">
+        <item>0xFFEF5350</item> <!-- 0 红 -->
+        <item>0xFF64B5F6</item> <!-- 1 蓝 -->
+        <item>0xFF66BB6A</item> <!-- 2 绿 -->
+        <item>0xFFFFD54F</item> <!-- 3 黄 -->
+        <item>0xFFCE93D8</item> <!-- 4 紫 -->
+        <item>0xFFF48FB1</item> <!-- 5 粉 -->
+        <item>0xFFFFB74D</item> <!-- 6 橙 -->
+        <item>0xFF4DD0E1</item> <!-- 7 青 -->
     </integer-array>
 
 </resources>
