@@ -111,8 +111,10 @@ public class ParkingFragment extends Fragment {
         viewModel.getLevelEvent().observe(getViewLifecycleOwner(), this::onLevelReady);
         viewModel.getMoveEvent().observe(getViewLifecycleOwner(), this::onMoved);
         viewModel.getMessageEvent().observe(getViewLifecycleOwner(), this::onMessage);
-        viewModel.getFinishEvent().observe(getViewLifecycleOwner(), this::onFinish);
+        // boardEvent 必须先于 finishEvent 注册：移除 / 排序道具触发的离场动画要
+        // 先开始播放，finishEvent 处理时 isBusy() 才能正确反映"动画还在跑"。
         viewModel.getBoardEvent().observe(getViewLifecycleOwner(), this::onBoardSteps);
+        viewModel.getFinishEvent().observe(getViewLifecycleOwner(), this::onFinish);
     }
 
     @Override
@@ -129,7 +131,10 @@ public class ParkingFragment extends Fragment {
 
     @Override
     public void onDestroyView() {
-        binding.parkingView.setListener(null);
+        if (binding != null) {
+            binding.parkingView.setListener(null);
+            binding.parkingView.setOnAnimationFinishedListener(null);
+        }
         binding = null;
         super.onDestroyView();
     }
@@ -264,6 +269,23 @@ public class ParkingFragment extends Fragment {
             return;
         }
         viewModel.clearFinishEvent();
+        // 通关 / 卡住时，离场动画（接客 → 开上马路 → 开走）可能还在播放。
+        // 还有动画在跑就先不弹窗，等所有车都开走、动画结束回调后再弹。
+        if (!binding.parkingView.isBusy()) {
+            showEndDialog(solved);
+            return;
+        }
+        final boolean solvedFlag = solved;
+        binding.parkingView.setOnAnimationFinishedListener(() -> {
+            if (binding == null) {
+                return;
+            }
+            binding.parkingView.setOnAnimationFinishedListener(null);
+            showEndDialog(solvedFlag);
+        });
+    }
+
+    private void showEndDialog(boolean solved) {
         if (solved) {
             showSolvedDialog();
         } else {

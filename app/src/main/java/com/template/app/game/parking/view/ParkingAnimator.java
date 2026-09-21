@@ -87,6 +87,15 @@ class ParkingAnimator {
     /** 待播放的离场车序列。 */
     private final ArrayDeque<LeavingCar> boardQueue = new ArrayDeque<>();
 
+    /**
+     * 已入队但还没到播放时刻的离场车（例如"刚驶出停车场的车先开进接客位、
+     * 到位后再上客"，需要延迟 {@link #EXIT_DURATION_MS} 才开始）。
+     * 放在动画状态机内部而非用 {@code postDelayed}，可避免"等待期 isAnimating 误判为
+     * 已结束"的一帧空隙，从而让上层能可靠地等到所有车开走。
+     */
+    private final ArrayDeque<LeavingCar> pendingBoardQueue = new ArrayDeque<>();
+    private long pendingBoardStart;
+
     /** 正在播放的那辆车；为 null 时若队列非空则下一帧取出。 */
     private LeavingCar activeBoard;
 
@@ -129,19 +138,32 @@ class ParkingAnimator {
         }
     }
 
-    /** 把一批离场车加入播放队列（顺序即入队顺序，依次播放）。 */
-    void enqueueBoardCars(List<LeavingCar> cars) {
+    /**
+     * 把一批离场车加入播放队列（顺序即入队顺序，依次播放）。
+     *
+     * @param delayMs 延迟多久才开始播放；&gt;0 时先进入 pending 队列，
+     *                {@link #tickChoreography(long)} 到点后转进正式队列，
+     *                等待期间 {@link #hasBoardQueue()} 仍为真。
+     */
+    void enqueueBoardCars(List<LeavingCar> cars, long delayMs) {
         if (cars == null) {
             return;
         }
-        for (LeavingCar car : cars) {
-            boardQueue.addLast(car);
+        if (delayMs <= 0) {
+            for (LeavingCar car : cars) {
+                boardQueue.addLast(car);
+            }
+            return;
         }
+        for (LeavingCar car : cars) {
+            pendingBoardQueue.addLast(car);
+        }
+        pendingBoardStart = now() + delayMs;
     }
 
-    /** 播放是否仍在进行（含队列里还没轮到的车）。 */
+    /** 播放是否仍在进行（含队列里还没轮到的车，以及已入队但还没到播放时刻的车）。 */
     boolean hasBoardQueue() {
-        return activeBoard != null || !boardQueue.isEmpty();
+        return activeBoard != null || !boardQueue.isEmpty() || !pendingBoardQueue.isEmpty();
     }
 
     /**
@@ -152,6 +174,12 @@ class ParkingAnimator {
      * 队列里有多辆时依次播放——这就是"一辆辆开走"。
      */
     void tickChoreography(long now) {
+        // 等待期结束的离场车转进正式队列，保证"一辆辆开走"的接力不断档。
+        if (!pendingBoardQueue.isEmpty() && now >= pendingBoardStart) {
+            while (!pendingBoardQueue.isEmpty()) {
+                boardQueue.addLast(pendingBoardQueue.pollFirst());
+            }
+        }
         if (activeBoard == null) {
             if (!boardQueue.isEmpty()) {
                 activeBoard = boardQueue.pollFirst();

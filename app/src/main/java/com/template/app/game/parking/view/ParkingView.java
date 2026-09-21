@@ -46,10 +46,18 @@ public class ParkingView extends View implements ParkingTouchHandler.Host {
         void onRemoveRequested(int vehicleId);
     }
 
+    /** 一次"所有动画都播完"的瞬时通知，用于让通关 / 卡住弹窗等到车全开走再弹出。 */
+    public interface OnAnimationFinishedListener {
+        void onAnimationFinished();
+    }
+
     @Nullable
     private ParkingEngine engine;
     @Nullable
     private Listener listener;
+    @Nullable
+    private OnAnimationFinishedListener animationFinishedListener;
+    private boolean wasAnimating;
 
     private ParkingGeometry geometry;
     private ParkingRenderer renderer;
@@ -92,6 +100,11 @@ public class ParkingView extends View implements ParkingTouchHandler.Host {
     public void setListener(@Nullable Listener listener) {
         this.listener = listener;
         handler.setListener(listener);
+    }
+
+    /** 注册"所有动画播完"的监听（通关 / 卡住弹窗用它推迟弹出）。传 null 即注销。 */
+    public void setOnAnimationFinishedListener(@Nullable OnAnimationFinishedListener listener) {
+        this.animationFinishedListener = listener;
     }
 
     /** 进入 / 退出「移除」选择模式：该模式下车辆被高亮并可被点掉。 */
@@ -147,27 +160,25 @@ public class ParkingView extends View implements ParkingTouchHandler.Host {
 
         // 接客离场的车排进离场动画。被当场接走的那辆刚驶出停车场、正在播放驶入接客位的动画，
         // 待其到位后再开始上客，避免车还在半路而乘客已经上车的双重影像。
+        // 延迟入队交给动画状态机内部处理，等待期间 isAnimating 仍为真，确保上层能
+        // 可靠地等到所有车都开走（见 isBusy / OnAnimationFinishedListener）。
         if (result.boardSteps != null && !result.boardSteps.isEmpty()) {
-            final List<BoardStep> steps = result.boardSteps;
-            postDelayed(() -> {
-                enqueueBoardSteps(steps, result);
-                invalidate();
-            }, ParkingAnimator.EXIT_DURATION_MS);
+            enqueueBoardSteps(result.boardSteps, result, ParkingAnimator.EXIT_DURATION_MS);
         }
         invalidate();
     }
 
     /**
      * 「移除 / 排序」后可能触发一批车接客离场，走与移动相同的离场编排。
-     * 这些车都是"在接客位等到队首"的，故全部按车位定位。
+     * 这些车都是"在接客位等到队首"的，故全部按车位定位，立即可播。
      */
     public void startBoardSteps(List<BoardStep> steps) {
-        enqueueBoardSteps(steps, null);
+        enqueueBoardSteps(steps, null, 0);
         invalidate();
     }
 
     /** 把引擎给的接客清单转成带屏幕坐标的离场车，交给动画状态机排队播放。 */
-    private void enqueueBoardSteps(List<BoardStep> steps, MoveResult result) {
+    private void enqueueBoardSteps(List<BoardStep> steps, MoveResult result, long delayMs) {
         if (steps == null || steps.isEmpty()) {
             return;
         }
@@ -175,7 +186,7 @@ public class ParkingView extends View implements ParkingTouchHandler.Host {
         for (BoardStep step : steps) {
             cars.add(buildLeavingCar(step, result));
         }
-        anim.enqueueBoardCars(cars);
+        anim.enqueueBoardCars(cars, delayMs);
     }
 
     /**
@@ -249,7 +260,14 @@ public class ParkingView extends View implements ParkingTouchHandler.Host {
             return;
         }
         renderer.draw(canvas, engine, anim, removeMode);
-        if (renderer.isAnimating(anim)) {
+        boolean animating = renderer.isAnimating(anim);
+        // 动画从"在播"切到"停了"的那一刻，通知上层（弹窗等）。用 wasAnimating
+        // 保证只触发一次，避免每帧都回调。
+        if (wasAnimating && !animating && animationFinishedListener != null) {
+            animationFinishedListener.onAnimationFinished();
+        }
+        wasAnimating = animating;
+        if (animating) {
             postInvalidateOnAnimation();
         }
     }
