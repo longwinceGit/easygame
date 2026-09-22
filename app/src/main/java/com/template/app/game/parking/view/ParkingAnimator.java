@@ -113,8 +113,8 @@ class ParkingAnimator {
         final Direction direction;
         final int length;
         final int count;
-        final float fromX, fromY;              // 起点：车原本停在的接客位（上客滑向左侧前在此）
-        final float spotX, spotY, spotAngle;   // 上客点：统一在左侧接客位
+        final float fromX, fromY;              // 起点：车原本停在的接客位
+        final float spotX, spotY, spotAngle;   // 上客点：就地上下客，即车自己所在的接客位
         final float roadX, roadY;              // 下到马路后的落点（angle 固定 0）
         final float leaveX, leaveY, leaveAngle; // 离场终点：马路上自左向右开到右端屏幕外（angle=0）
         final float width, height;             // 车身尺寸（按上客点场景取棋盘/接客位尺度）

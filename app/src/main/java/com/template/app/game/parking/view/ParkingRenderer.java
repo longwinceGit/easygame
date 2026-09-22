@@ -59,6 +59,8 @@ class ParkingRenderer {
     private final Paint roadPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
     private final Paint roadLinePaint = new Paint(Paint.ANTI_ALIAS_FLAG);
     private final Paint roadArrowPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
+    private final Paint seatTextPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
+    private final Paint seatTextOutlinePaint = new Paint(Paint.ANTI_ALIAS_FLAG);
 
     private final RectF rect = new RectF();
     private final RectF inner = new RectF();
@@ -151,6 +153,22 @@ class ParkingRenderer {
         roadArrowPaint.setStrokeWidth(2.4f * density);
         roadArrowPaint.setColor(ContextCompat.getColor(context, R.color.game_parking_road_arrow));
         roadArrowPaint.setStrokeJoin(Paint.Join.ROUND);
+
+        // 剩余座位数：白字 + 深描边双绘，与方向箭头同一套可辨识策略，
+        // 保证在任意车身配色（含琥珀、黄等浅色车）上都读得清。
+        seatTextOutlinePaint.setStyle(Paint.Style.STROKE);
+        seatTextOutlinePaint.setStrokeWidth(3f * density);
+        seatTextOutlinePaint.setColor(
+            ContextCompat.getColor(context, R.color.game_parking_vehicle_stroke));
+        seatTextOutlinePaint.setTextAlign(Paint.Align.CENTER);
+        seatTextOutlinePaint.setTextSize(11f * density);
+        seatTextOutlinePaint.setFakeBoldText(true);
+
+        seatTextPaint.setStyle(Paint.Style.FILL);
+        seatTextPaint.setColor(ContextCompat.getColor(context, R.color.game_parking_arrow_fill));
+        seatTextPaint.setTextAlign(Paint.Align.CENTER);
+        seatTextPaint.setTextSize(11f * density);
+        seatTextPaint.setFakeBoldText(true);
     }
 
     // ==================================================================
@@ -210,7 +228,7 @@ class ParkingRenderer {
         float startX = signLeft + signWidth + 10f * geometry.density;
 
         // 正在上客：把"还没上车的乘客"作为半透明小人放在<b>队首（左边）</b>，
-        // 与最左侧上客点对齐，随上车从左到右一个个消失——视觉上就是"乘客在左边上车"。
+        // 随上车从左到右一个个消失——视觉上就是"队列最前的人正在上车"。
         int pending = 0;
         int pendingColor = 0;
         int boardCount = 0;
@@ -302,10 +320,41 @@ class ParkingRenderer {
             float left = geometry.slotLeft(slot);
             float centerX = left + geometry.slotWidth / 2f;
             float centerY = top + height / 2f;
+            float carWidth = geometry.slotWidth * 0.8f;
+            float carHeight = height * 0.5f;
             drawCarShape(canvas, Direction.RIGHT, v.colorIndex, centerX, centerY,
-                0f, 1f, 1f, geometry.slotWidth * 0.8f, height * 0.5f);
+                0f, 1f, 1f, carWidth, carHeight);
+            // 未满载：标出还差几位。车必须装满才开走，这个数字就是它此刻还在等的人数。
+            if (!v.isFull()) {
+                drawSeatBadge(canvas, v.remainingCapacity(), centerX, centerY,
+                    carWidth, carHeight, 0f);
+            }
             slot++;
         }
+    }
+
+    /**
+     * 在车身右上角标出<b>剩余座位数</b>（还差几位才能开走）。
+     * <p>
+     * 两处都会画：接客区里没装满的车（它还在等客，玩家要一眼看出"还差几个"），
+     * 以及停车场里的车（尚未上客，剩余座位 == 它的座位数，等于把"小汽车 2 座 / 巴士 3 座"显式化）。
+     * 满载的车不画。
+     *
+     * @param angleDegrees 车身倾角，角标随之旋转——否则停车场（整体倾斜）里的车
+     *                     角标会浮在车身之外。
+     */
+    private void drawSeatBadge(Canvas canvas, int remaining, float centerX, float centerY,
+                               float width, float height, float angleDegrees) {
+        canvas.save();
+        canvas.rotate(angleDegrees, centerX, centerY);
+        float bx = centerX + width * 0.28f;
+        float by = centerY - height * 0.30f;
+        // 基线垂直居中：ascent 为负、descent 为正，取二者中值抵消
+        float baseline = by - (seatTextPaint.ascent() + seatTextPaint.descent()) / 2f;
+        String text = String.valueOf(remaining);
+        canvas.drawText(text, bx, baseline, seatTextOutlinePaint);
+        canvas.drawText(text, bx, baseline, seatTextPaint);
+        canvas.restore();
     }
 
     // ==================================================================
@@ -376,11 +425,18 @@ class ParkingRenderer {
                 col += anim.dragCells * v.direction.dCol;
             }
             geometry.vehicleScreenCenter(row, col, v.length, v.horizontal);
-            drawCarShape(canvas, v.direction, v.colorIndex,
-                geometry.tmpX, geometry.tmpY, ParkingGeometry.ROTATION_DEGREES, 1f,
-                removeMode ? 1.06f : 1f,
-                geometry.vehicleWidth(v.length, v.horizontal),
-                geometry.vehicleHeight(v.length, v.horizontal));
+            float cx = geometry.tmpX;
+            float cy = geometry.tmpY;
+            float vw = geometry.vehicleWidth(v.length, v.horizontal);
+            float vh = geometry.vehicleHeight(v.length, v.horizontal);
+            drawCarShape(canvas, v.direction, v.colorIndex, cx, cy,
+                ParkingGeometry.ROTATION_DEGREES, 1f, removeMode ? 1.06f : 1f, vw, vh);
+            // 停车场里的车尚未上客，剩余座位即它的座位数：小汽车 2、巴士 3。
+            // 角标必须跟着棋盘倾角旋转，否则会浮在车身之外。
+            if (!v.isFull()) {
+                drawSeatBadge(canvas, v.remainingCapacity(), cx, cy, vw, vh,
+                    ParkingGeometry.ROTATION_DEGREES);
+            }
         }
     }
 
@@ -425,7 +481,7 @@ class ParkingRenderer {
         int phase = anim.boardPhase(now);
         float x, y, angle, alpha;
         if (phase == 0) {
-            // 上客：从原接客位滑到最左侧上客点（若两者不同），到位前先就位再上客
+            // 上客：就地在这辆车自己的接客位进行（起点与上客点重合，不再横滑）
             float fx = anim.boardFromX();
             float fy = anim.boardFromY();
             float tx = anim.boardSpotX();

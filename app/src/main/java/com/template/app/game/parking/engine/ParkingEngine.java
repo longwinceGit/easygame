@@ -22,7 +22,7 @@ import java.util.List;
  *   <li>每辆车只处于停车场 / 接客区 / 已离开三处之一</li>
  *   <li>接客区车辆数 ≤ {@link ParkingConfig#PICKUP_SLOTS}</li>
  *   <li>队列人数 + 已接客数 == 本关总人数（守恒，「移除」会让乘客一并离开，同步扣减总数）</li>
- *   <li>{@code SOLVED} ⟺ 队列为空</li>
+ *   <li>{@code SOLVED} ⟺ 队列为空 <b>且</b> 所有乘客都已上车（队列空但有人没上车 = 死局）</li>
  *   <li>{@code RUNNING} 时至少有一辆车可移动，否则立刻转 {@code STUCK}</li>
  * </ol>
  */
@@ -75,6 +75,7 @@ public final class ParkingEngine {
         for (Vehicle prototype : level.vehicles) {
             Vehicle copy = prototype.copy();
             copy.place = Vehicle.PLACE_LOT;
+            copy.loaded = 0;
             vehicles.add(copy);
         }
         queue.clear();
@@ -435,15 +436,23 @@ public final class ParkingEngine {
     }
 
     /**
-     * 反复结算接客区：只要队首颜色能在接客区里找到车，就让它接客驶离、释放车位。
+     * 反复结算接客区：只要队首颜色能在接客区里找到车，就让它上客。
+     * <p>
+     * <b>核心规则：必须满载才驶离。</b>每次上客只填到 {@link Vehicle#remainingCapacity()}；
+     * 填满（{@link Vehicle#isFull()}）才置为 {@code PLACE_GONE} 并释放车位，
+     * <b>没装满就继续停在接客区等客</b>，绝不半载开走。
      * <p>
      * 这是本作最主要的「解套」路径——先派上去占位，等队首轮到它的颜色，它自己就走了。
      * <p>
-     * 每接走一辆车，除了更新计分与队列，还会记一笔 {@link BoardStep} 交给渲染层，
-     * 让"乘客逐个上车、车一辆辆开走"能按发生顺序播放出来。
+     * 每辆<b>驶离</b>的车会记一笔 {@link BoardStep} 交给渲染层，
+     * 让"乘客逐个上车、车一辆辆开走"能按发生顺序播放出来；
+     * 只上了一部分客、仍在等客的车不产生 step（它留在接客区，画面上本就可见）。
+     * <p>
+     * 循环必然终止：每轮要么消耗掉一个队列分组，要么让某辆车的 {@code loaded} 增加至少 1
+     * （上界是它的容量），两者都是有限量。
      *
-     * @param moved 本次刚驶出停车场的车（可能直接对色接客）；其余情况是 {@code null}
-     * @return 本次接客离场的车辆清单，按接客顺序
+     * @param moved 本次刚驶出停车场的车（可能直接对色上客）；其余情况是 {@code null}
+     * @return 本次接客<b>离场</b>的车辆清单，按离场顺序
      */
     private List<BoardStep> resolvePickup(Vehicle moved) {
         List<BoardStep> steps = new ArrayList<>();
@@ -451,7 +460,8 @@ public final class ParkingEngine {
             PassengerGroup front = queue.get(0);
             Vehicle match = null;
             for (Vehicle v : vehicles) {
-                if (v.inPickup() && v.colorIndex == front.colorIndex) {
+                // 已满载的车必然已经驶离，这里再判一次是防御：不重复给它上客
+                if (v.inPickup() && v.colorIndex == front.colorIndex && !v.isFull()) {
                     match = v;
                     break;
                 }
@@ -459,19 +469,24 @@ public final class ParkingEngine {
             if (match == null) {
                 break;
             }
-            int take = Math.min(match.capacity(), front.count);
+            int take = Math.min(match.remainingCapacity(), front.count);
             front.count -= take;
+            match.loaded += take;
             passengersServed += take;
             score += take * ParkingConfig.SCORE_PER_PASSENGER;
-            // 所有被接客的车都走"停进接客位"路径：即便刚驶出即对色的那辆，
-            // 也先开进乘客区的接客位再上客，保证流程统一（车都先到乘客区接人）。
-            int slot = pickupIndex(match);
-            steps.add(new BoardStep(match.id, match.colorIndex, match.direction,
-                match.length, take, slot, false));
-            match.place = Vehicle.PLACE_GONE;
             if (front.count == 0) {
                 queue.remove(0);
             }
+            if (!match.isFull()) {
+                // 未满载：留在接客区继续等客，不生成离场步骤
+                continue;
+            }
+            // 所有被接客离场的车都走"停进接客位"路径：即便刚驶出即对色的那辆，
+            // 也先开进乘客区的接客位再上客，保证流程统一（车都先到乘客区接人）。
+            int slot = pickupIndex(match);
+            steps.add(new BoardStep(match.id, match.colorIndex, match.direction,
+                match.length, match.loaded, slot, false));
+            match.place = Vehicle.PLACE_GONE;
         }
         return steps;
     }
@@ -520,8 +535,15 @@ public final class ParkingEngine {
     /** 一步结束后的收尾：判定通关 / 死局。 */
     private void finishTurn() {
         if (queue.isEmpty()) {
-            state = State.SOLVED;
-            score += ParkingConfig.SCORE_PER_LEVEL_UNIT * levelIndex;
+            // 队列空还不够：跨组抢客可能让某辆车永远装不满（人已被别的车接走），
+            // 此时队列虽空但仍有乘客没上车。那不是过关，而是死局——
+            // 否则玩家会看到"过关"提示却还剩人没接完。
+            if (passengersServed == totalPassengers) {
+                state = State.SOLVED;
+                score += ParkingConfig.SCORE_PER_LEVEL_UNIT * levelIndex;
+            } else {
+                state = State.STUCK;
+            }
             return;
         }
         if (!hasAnyMove()) {
@@ -615,11 +637,13 @@ public final class ParkingEngine {
         int[] rows = new int[n];
         int[] cols = new int[n];
         int[] places = new int[n];
+        int[] loaded = new int[n];
         for (int i = 0; i < n; i++) {
             Vehicle v = vehicles.get(i);
             rows[i] = v.row;
             cols[i] = v.col;
             places[i] = v.place;
+            loaded[i] = v.loaded;
         }
         int q = queue.size();
         int[] colors = new int[q];
@@ -628,7 +652,7 @@ public final class ParkingEngine {
             colors[i] = queue.get(i).colorIndex;
             counts[i] = queue.get(i).count;
         }
-        return new Snapshot(rows, cols, places, colors, counts, score, passengersServed,
+        return new Snapshot(rows, cols, places, loaded, colors, counts, score, passengersServed,
             removesLeft, sortsLeft, totalPassengers, levelIndex, state);
     }
 
@@ -637,6 +661,7 @@ public final class ParkingEngine {
         private final int[] rows;
         private final int[] cols;
         private final int[] places;
+        private final int[] loaded;
         private final int[] queueColors;
         private final int[] queueCounts;
         private final int score;
@@ -647,13 +672,14 @@ public final class ParkingEngine {
         private final int levelIndex;
         private final State state;
 
-        Snapshot(int[] rows, int[] cols, int[] places,
+        Snapshot(int[] rows, int[] cols, int[] places, int[] loaded,
                  int[] queueColors, int[] queueCounts,
                  int score, int passengersServed, int removesLeft, int sortsLeft,
                  int totalPassengers, int levelIndex, State state) {
             this.rows = rows;
             this.cols = cols;
             this.places = places;
+            this.loaded = loaded;
             this.queueColors = queueColors;
             this.queueCounts = queueCounts;
             this.score = score;
@@ -672,6 +698,7 @@ public final class ParkingEngine {
                 v.row = rows[i];
                 v.col = cols[i];
                 v.place = places[i];
+                v.loaded = loaded[i];
             }
             engine.queue.clear();
             for (int i = 0; i < queueColors.length; i++) {

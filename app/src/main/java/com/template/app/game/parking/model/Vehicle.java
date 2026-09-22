@@ -41,6 +41,14 @@ public final class Vehicle {
     /** 当前所在区域：{@link #PLACE_LOT} / {@link #PLACE_PICKUP} / {@link #PLACE_GONE}。 */
     public int place = PLACE_LOT;
 
+    /**
+     * 已上车的乘客数。
+     * <p>
+     * 规则：车辆<b>必须满载</b>（{@code loaded == }{@link #capacity()}）才能驶离接客区；
+     * 没装满就必须停在接客区继续等客。
+     */
+    public int loaded;
+
     public Vehicle(int id, int length, boolean horizontal, Direction direction,
                    int colorIndex, int row, int col) {
         this.id = id;
@@ -61,11 +69,22 @@ public final class Vehicle {
         this.row = source.row;
         this.col = source.col;
         this.place = source.place;
+        this.loaded = source.loaded;
     }
 
     /** 载客量 = 车身长度：小汽车 2 座，巴士 3 座。 */
     public int capacity() {
         return length;
+    }
+
+    /** 还能上几位乘客。 */
+    public int remainingCapacity() {
+        return capacity() - loaded;
+    }
+
+    /** 是否已满载——只有满载的车才允许驶离接客区。 */
+    public boolean isFull() {
+        return loaded >= capacity();
     }
 
     /** 是否仍停在停车场内。 */

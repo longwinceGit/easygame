@@ -40,6 +40,15 @@ public class ParkingFragment extends Fragment {
     private ParkingViewModel viewModel;
     private String[] colorNames;
 
+    /**
+     * 历史最高分（由 {@code getBest()} 的观察者持续刷新）。
+     * <p>
+     * 这个字段<b>不能省</b>：Room 的 {@code LiveData} 只有在存在活跃观察者时才真正查询数据库，
+     * 没有观察者就从不计算、{@code getValue()} 恒为 null。弹窗里临时读一次是读不到数的，
+     * 必须靠这里的常驻观察者把值养出来。
+     */
+    private int historicalBest;
+
     @Nullable
     @Override
     public View onCreateView(@NonNull LayoutInflater inflater,
@@ -91,6 +100,10 @@ public class ParkingFragment extends Fragment {
         renderHint();
 
         viewModel.getScore().observe(getViewLifecycleOwner(), this::renderScore);
+        // 历史最高分必须常驻观察：Room 的 LiveData 只在有活跃观察者时才查询数据库，
+        // 不注册的话 getValue() 恒为 null，通关提示里的"历史最高"会错成"累计分数"。
+        viewModel.getBest().observe(getViewLifecycleOwner(),
+            value -> historicalBest = value == null ? 0 : value);
         viewModel.getLevel().observe(getViewLifecycleOwner(), this::renderLevel);
         viewModel.getRemovesLeft().observe(getViewLifecycleOwner(), this::renderRemoveButton);
         viewModel.getSortsLeft().observe(getViewLifecycleOwner(), this::renderSortButton);
@@ -296,9 +309,9 @@ public class ParkingFragment extends Fragment {
     private void showSolvedDialog() {
         int level = viewModel.getLevel().getValue() == null ? 1 : viewModel.getLevel().getValue();
         int score = viewModel.getScore().getValue() == null ? 0 : viewModel.getScore().getValue();
-        Integer best = viewModel.getBest().getValue();
-        // Room 的 LiveData 是异步回调的，此刻读到的可能还是本局之前的最高分，取 max
-        int bestScore = Math.max(best == null ? 0 : best, score);
+        // 本局成绩入库是异步的，LiveData 可能还没刷新到最新，用 max 兜住这个时间差。
+        // （historicalBest 由常驻观察者持续刷新，见 onViewCreated。）
+        int bestScore = Math.max(historicalBest, score);
         int served = viewModel.getEngine().getPassengersServed();
         String message = getString(R.string.parking_solved_message, served, score, bestScore);
         announce(message);
