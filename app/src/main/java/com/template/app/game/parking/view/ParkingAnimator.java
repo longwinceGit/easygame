@@ -36,6 +36,8 @@ class ParkingAnimator {
     /** 单车上客总时长的上下限（避免 1 人太短、3 人太长）。 */
     static final long BOARD_MIN_MS = 280L;
     static final long BOARD_MAX_MS = 820L;
+    /** 占位 / 稍后接走的车从上客位滑到左侧上客点的时长（上客阶段前半段完成）。 */
+    static final long BOARD_SLIDE_MS = 240L;
     /** 上完客后整车开走的时长。 */
     static final long LEAVE_DURATION_MS = 480L;
     /** 上完客后整车驶下马路、落到车道上的时长。 */
@@ -105,18 +107,20 @@ class ParkingAnimator {
     /** 当前阶段起始时刻。 */
     private long boardPhaseStart;
 
-    /** 一辆离场车：语义 + 屏幕坐标（上客点 / 离场终点）。全部由 View 在入队时算好。 */
+    /** 一辆离场车：语义 + 屏幕坐标（起点 / 上客点 / 离场终点）。全部由 View 在入队时算好。 */
     static final class LeavingCar {
         final int colorIndex;
         final Direction direction;
         final int length;
         final int count;
-        final float spotX, spotY, spotAngle;   // 上客点：车在接客位接客（straightOut 时为棋盘斜度）
+        final float fromX, fromY;              // 起点：车原本停在的接客位（上客滑向左侧前在此）
+        final float spotX, spotY, spotAngle;   // 上客点：统一在左侧接客位
         final float roadX, roadY;              // 下到马路后的落点（angle 固定 0）
         final float leaveX, leaveY, leaveAngle; // 离场终点：马路上自左向右开到右端屏幕外（angle=0）
         final float width, height;             // 车身尺寸（按上客点场景取棋盘/接客位尺度）
 
         LeavingCar(int colorIndex, Direction direction, int length, int count,
+                   float fromX, float fromY,
                    float spotX, float spotY, float spotAngle,
                    float roadX, float roadY,
                    float leaveX, float leaveY, float leaveAngle,
@@ -125,6 +129,8 @@ class ParkingAnimator {
             this.direction = direction;
             this.length = length;
             this.count = count;
+            this.fromX = fromX;
+            this.fromY = fromY;
             this.spotX = spotX;
             this.spotY = spotY;
             this.spotAngle = spotAngle;
@@ -283,6 +289,23 @@ class ParkingAnimator {
 
     float boardSpotAngle() {
         return activeBoard.spotAngle;
+    }
+
+    /** 上客前车停的起点（原接客位）。与 spot 不同则表示需要滑向左侧上客点。 */
+    float boardFromX() {
+        return activeBoard.fromX;
+    }
+
+    float boardFromY() {
+        return activeBoard.fromY;
+    }
+
+    /** 上客阶段内从起点滑到左侧上客点的进度 0..1（用于车头对齐前先就位）。 */
+    float boardSlideProgress(long now) {
+        if (activeBoard == null || boardPhase != 0) {
+            return 1f;
+        }
+        return Math.min(1f, (now - boardPhaseStart) / (float) BOARD_SLIDE_MS);
     }
 
     float boardLeaveX() {

@@ -190,22 +190,25 @@ public class ParkingView extends View implements ParkingTouchHandler.Host {
     }
 
     /**
-     * 为单个接客步骤算好上客点 / 离场终点等屏幕坐标。
+     * 为单个接客步骤算好起点 / 上客点 / 离场终点等屏幕坐标。
      * <p>
-     * <b>所有离场车都在乘客区（接客位）上客</b>，车身统一转正、<b>车头朝右</b>：
-     * 接满乘客后先驶下到马路、再自左向右开走——车头方向始终朝右，
-     * 修正此前"车已开到马路上却仍朝原车场方向"的问题。
+     * <b>上客统一发生在乘客区最左侧接客位（slot 0）</b>：车头朝右、车身转正，
+     * 接满乘客后先驶下到马路、再自左向右开走。占位 / 稍后接走的车从它原本停的
+     * 接客位（step.slot）滑到最左侧上客点，避免"在右侧车位直接上车"的违和感。
      */
     private ParkingAnimator.LeavingCar buildLeavingCar(BoardStep step, MoveResult result) {
-        float sx = step.slot >= 0
-            ? geometry.slotCenterX(step.slot)
+        float fromX = step.slot >= 0
+            ? geometry.slotCenterX(step.slot)   // 起点：车原本停的接客位
             : geometry.stripLeft + geometry.stripWidth / 2f;
+        float fromY = geometry.slotCenterY();
+        // 统一在最左侧接客位上客
+        float sx = geometry.slotCenterX(0);
         float sy = geometry.slotCenterY();
         // 横向车：车头向右，长度方向沿屏幕 x 轴展开（width 为长边）
         float w = geometry.vehicleWidth(step.length, true);
         float h = geometry.vehicleHeight(step.length, true);
         return new ParkingAnimator.LeavingCar(step.colorIndex, Direction.RIGHT, step.length,
-            step.count, sx, sy, 0f,
+            step.count, fromX, fromY, sx, sy, 0f,
             sx, geometry.roadCenterY,
             geometry.roadLeft + geometry.roadWidth + w, geometry.roadCenterY, 0f, w, h);
     }

@@ -29,13 +29,6 @@ public final class ParkingLevelGenerator {
 
     private static final int PLACEMENT_ATTEMPTS = 160;
 
-    /**
-     * 单次 generate 的墙钟预算。生成器在后台线程跑，但其 BFS 求解会大量分配对象、
-     * 在低端机/模拟器上可能把单核吃满并引发剧烈 GC，反而饿死主线程导致 ANR。
-     * 超过预算就立刻走 {@link #emergencyLevel} 保底，玩家永远有得玩，且生成永不拖垮 UI。
-     */
-    private static final long GENERATE_TIME_BUDGET_NS = 1_200_000_000L; // 1.2s
-
     private final Random random;
 
     public ParkingLevelGenerator() {
@@ -55,18 +48,14 @@ public final class ParkingLevelGenerator {
      * 生成一个关卡。
      * <p>
      * <b>必须在后台线程调用</b>（ADR-007）：最坏情况是数十万次状态展开。
-     * 为避免在低端机/模拟器上耗时长到拖垮主线程（ANR），这里加了<b>墙钟预算</b>
-     * {@link #GENERATE_TIME_BUDGET_NS}：一旦超时立刻走 {@link #emergencyLevel} 保底。
+     * 求解器本身受 {@link ParkingConfig#GENERATOR_MAX_BFS_STATES} 状态数约束，
+     * 不再叠加墙钟预算，使测试机与真机的生成行为完全一致。
      */
     public Level generate(int levelIndex) {
         int count = ParkingConfig.vehicleCount(levelIndex);
-        long deadline = System.nanoTime() + GENERATE_TIME_BUDGET_NS;
 
         for (int attempt = 0; attempt < ParkingConfig.GENERATOR_MAX_ATTEMPTS; attempt++) {
-            if (System.nanoTime() > deadline) {
-                return emergencyLevel(levelIndex);
-            }
-            Level level = tryGenerate(levelIndex, count, deadline);
+            Level level = tryGenerate(levelIndex, count);
             if (level != null) {
                 return level;
             }
@@ -75,10 +64,7 @@ public final class ParkingLevelGenerator {
         while (count > 2) {
             count--;
             for (int attempt = 0; attempt < 8; attempt++) {
-                if (System.nanoTime() > deadline) {
-                    return emergencyLevel(levelIndex);
-                }
-                Level level = tryGenerate(levelIndex, count, deadline);
+                Level level = tryGenerate(levelIndex, count);
                 if (level != null) {
                     return level;
                 }
@@ -92,12 +78,12 @@ public final class ParkingLevelGenerator {
     // 生成流程
     // ==================================================================
 
-    private Level tryGenerate(int levelIndex, int vehicleCount, long deadline) {
+    private Level tryGenerate(int levelIndex, int vehicleCount) {
         List<Vehicle> layout = randomLayout(vehicleCount);
         if (layout == null) {
             return null;
         }
-        Solution solution = solve(layout, vehicleCount, deadline);
+        Solution solution = solve(layout, vehicleCount);
         // 质量门：拒绝"每辆车都能直接开走"的布局——那种局面点 N 下就通关，太简单
         if (solution == null
             || solution.totalMoves < ParkingConfig.minSolutionMoves(levelIndex)) {
@@ -208,7 +194,7 @@ public final class ParkingLevelGenerator {
         }
     }
 
-    private Solution solve(List<Vehicle> layout, int vehicleCount, long deadline) {
+    private Solution solve(List<Vehicle> layout, int vehicleCount) {
         int n = layout.size();
         Board board = new Board(layout);
         boolean[] gone = new boolean[n];
@@ -228,7 +214,7 @@ public final class ParkingLevelGenerator {
                 if (gone[i]) {
                     continue;
                 }
-                Node goal = board.extract(i, anchors, gone, deadline);
+                Node goal = board.extract(i, anchors, gone);
                 if (goal == null) {
                     continue;
                 }
@@ -286,10 +272,13 @@ public final class ParkingLevelGenerator {
          *
          * @return 终局节点；放弃（超限）或无解时返回 null
          */
-        Node extract(int target, int[] start, boolean[] gone, long deadline) {
+        Node extract(int target, int[] start, boolean[] gone) {
             int n = size;
             LongSet visited = new LongSet(ParkingConfig.GENERATOR_MAX_BFS_STATES);
-            int cap = ParkingConfig.GENERATOR_MAX_BFS_STATES + 2;
+            // 数组尺寸按"状态数预算"分配：根 + 至多 GENERATOR_MAX_BFS_STATES 个后继。
+            // 真正的预算上限是<b>入队状态数</b>（由下方 tail 守卫强制），而非出队扩展次数，
+            // 否则一个状态扩展可生成多个后继，入队总数会远超数组容量导致越界。
+            int cap = ParkingConfig.GENERATOR_MAX_BFS_STATES + 1;
             int[] frontier = new int[cap];
             long[] states = new long[cap];
             int[] depthArr = new int[cap];
@@ -304,8 +293,7 @@ public final class ParkingLevelGenerator {
 
             int expanded = 0;
             while (head < tail) {
-                if (++expanded > ParkingConfig.GENERATOR_MAX_BFS_STATES
-                        || System.nanoTime() > deadline) {
+                if (++expanded > ParkingConfig.GENERATOR_MAX_BFS_STATES) {
                     return null;
                 }
                 int cur = frontier[head++];
@@ -331,6 +319,9 @@ public final class ParkingLevelGenerator {
                         long nextState = (curState & ~(0x3FL << shift))
                             | ((long) newField << shift);
                         if (visited.add(nextState)) {
+                            if (tail >= cap) {
+                                return null; // 状态数预算耗尽，放弃本次求解
+                            }
                             int node = tail;
                             states[node] = nextState;
                             depthArr[node] = depthArr[cur] + 1;

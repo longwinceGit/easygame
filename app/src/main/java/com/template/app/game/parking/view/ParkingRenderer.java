@@ -207,8 +207,34 @@ class ParkingRenderer {
         float step = icon + 3f * geometry.density;
         float groupGap = 9f * geometry.density;
         float baseline = top + height * 0.56f;
-        float x = signLeft + signWidth + 10f * geometry.density;
+        float startX = signLeft + signWidth + 10f * geometry.density;
 
+        // 正在上客：把"还没上车的乘客"作为半透明小人放在<b>队首（左边）</b>，
+        // 与最左侧上客点对齐，随上车从左到右一个个消失——视觉上就是"乘客在左边上车"。
+        int pending = 0;
+        int pendingColor = 0;
+        int boardCount = 0;
+        if (anim.isBoardingActive() && !anim.isLeaving(now)) {
+            boardCount = anim.boardCount();
+            int boarded = anim.boardedSoFar(now);
+            pending = boardCount - boarded;
+            pendingColor = anim.boardColorIndex();
+        }
+        if (pending > 0) {
+            // 固定占用队首 [startX, startX + boardCount*step] 这一段；
+            // 已上车的留在最左，未上车的排在右侧并向中心收缩，最靠近车的先被接走。
+            float clusterRight = startX + boardCount * step;
+            float px = clusterRight - pending * step;
+            passengerPaint.setColor(passengerColors[pendingColor]);
+            passengerPaint.setAlpha(178);
+            for (int k = 0; k < pending; k++) {
+                drawPassenger(canvas, px, baseline, icon);
+                px += step;
+            }
+            passengerPaint.setAlpha(255);
+        }
+
+        float x = startX + (boardCount > 0 ? boardCount * step + groupGap : 0f);
         int drawn = 0;
         int frontDrawn = 0;
         for (int i = 0; i < engine.queueSize() && drawn < MAX_PASSENGER_ICONS; i++) {
@@ -226,30 +252,11 @@ class ParkingRenderer {
             x += groupGap;
         }
 
-        // 队首高亮：明确"现在要接的是它"
-        if (frontDrawn > 0) {
-            float startX = signLeft + signWidth + 10f * geometry.density;
+        // 队首高亮：覆盖"正在上客的小人 + 真实队首"，明确"现在要接的是它"
+        int highlightCount = (pending > 0 ? boardCount : 0) + frontDrawn;
+        if (highlightCount > 0) {
             float lineY = top + height - 5f * geometry.density;
-            canvas.drawLine(startX, lineY, startX + frontDrawn * step, lineY, accentPaint);
-        }
-
-        // 正在上客的车：把"还没上车的乘客"作为半透明小人留在队尾，一个个被接走
-        if (anim.isBoardingActive() && !anim.isLeaving(now)) {
-            int pending = anim.boardCount() - anim.boardedSoFar(now);
-            if (pending > 0) {
-                passengerPaint.setColor(passengerColors[anim.boardColorIndex()]);
-                passengerPaint.setAlpha(178);
-                float gx = Math.min(x + groupGap,
-                    geometry.stripLeft + geometry.stripWidth - icon - 4f * geometry.density);
-                for (int k = 0; k < pending; k++) {
-                    drawPassenger(canvas, gx, baseline, icon);
-                    gx += step;
-                    if (gx > geometry.stripLeft + geometry.stripWidth - icon) {
-                        break;
-                    }
-                }
-                passengerPaint.setAlpha(255);
-            }
+            canvas.drawLine(startX, lineY, startX + highlightCount * step, lineY, accentPaint);
         }
 
         int remaining = engine.getPassengersLeft() - drawn;
@@ -418,9 +425,14 @@ class ParkingRenderer {
         int phase = anim.boardPhase(now);
         float x, y, angle, alpha;
         if (phase == 0) {
-            // 上客：停在接客位
-            x = anim.boardSpotX();
-            y = anim.boardSpotY();
+            // 上客：从原接客位滑到最左侧上客点（若两者不同），到位前先就位再上客
+            float fx = anim.boardFromX();
+            float fy = anim.boardFromY();
+            float tx = anim.boardSpotX();
+            float ty = anim.boardSpotY();
+            float slide = easeInOutCubic(anim.boardSlideProgress(now));
+            x = lerp(fx, tx, slide);
+            y = lerp(fy, ty, slide);
             angle = anim.boardSpotAngle();
             alpha = 1f;
         } else if (phase == 1) {
