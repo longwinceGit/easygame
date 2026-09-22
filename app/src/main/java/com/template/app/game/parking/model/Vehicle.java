@@ -49,6 +49,15 @@ public final class Vehicle {
      */
     public int loaded;
 
+    /**
+     * 驶入接客区时分配的<b>固定车位</b>下标；{@code -1} 表示不在接客区。
+     * <p>
+     * 按<b>进入顺序</b>分配，且<b>在离开前不再变动</b>——
+     * 以前车位是"按 id 顺序实时重算"的，任何一辆车离开都会让它右边的车整体左移，
+     * 于是出现"第 3 位的车接客时动画却移到第 2 位"。改成固定车位后这类位移彻底消失。
+     */
+    public int slot = -1;
+
     public Vehicle(int id, int length, boolean horizontal, Direction direction,
                    int colorIndex, int row, int col) {
         this.id = id;
@@ -70,6 +79,7 @@ public final class Vehicle {
         this.col = source.col;
         this.place = source.place;
         this.loaded = source.loaded;
+        this.slot = source.slot;
     }
 
     /** 载客量 = 车身长度：小汽车 2 座，巴士 3 座。 */

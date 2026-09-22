@@ -207,8 +207,8 @@ public class ParkingView extends View implements ParkingTouchHandler.Host {
         // 横向车：车头向右，长度方向沿屏幕 x 轴展开（width 为长边）
         float w = geometry.vehicleWidth(step.length, true);
         float h = geometry.vehicleHeight(step.length, true);
-        return new ParkingAnimator.LeavingCar(step.colorIndex, Direction.RIGHT, step.length,
-            step.count, fromX, fromY, sx, sy, 0f,
+        return new ParkingAnimator.LeavingCar(step.vehicleId, step.colorIndex, Direction.RIGHT,
+            step.length, step.count, fromX, fromY, sx, sy, 0f,
             sx, geometry.roadCenterY,
             geometry.roadLeft + geometry.roadWidth + w, geometry.roadCenterY, 0f, w, h);
     }

@@ -102,8 +102,7 @@ public class ParkingFragment extends Fragment {
         viewModel.getScore().observe(getViewLifecycleOwner(), this::renderScore);
         // 历史最高分必须常驻观察：Room 的 LiveData 只在有活跃观察者时才查询数据库，
         // 不注册的话 getValue() 恒为 null，通关提示里的"历史最高"会错成"累计分数"。
-        viewModel.getBest().observe(getViewLifecycleOwner(),
-            value -> historicalBest = value == null ? 0 : value);
+        viewModel.getBest().observe(getViewLifecycleOwner(), this::renderBest);
         viewModel.getLevel().observe(getViewLifecycleOwner(), this::renderLevel);
         viewModel.getRemovesLeft().observe(getViewLifecycleOwner(), this::renderRemoveButton);
         viewModel.getSortsLeft().observe(getViewLifecycleOwner(), this::renderSortButton);
@@ -169,6 +168,17 @@ public class ParkingFragment extends Fragment {
             return;
         }
         binding.tvScore.setText(String.valueOf(score == null ? 0 : score));
+    }
+
+    /**
+     * 历史最高分：既刷新顶部栏的常驻显示，也缓存到 {@link #historicalBest}
+     * 供通关弹窗使用（弹窗要等离场动画播完才弹，届时不能再去读 LiveData 的瞬时值）。
+     */
+    private void renderBest(@Nullable Integer best) {
+        historicalBest = best == null ? 0 : best;
+        if (binding != null) {
+            binding.tvBest.setText(String.valueOf(historicalBest));
+        }
     }
 
     private void renderLevel(@Nullable Integer level) {

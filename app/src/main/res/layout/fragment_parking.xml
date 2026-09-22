@@ -39,6 +39,29 @@
             android:textSize="15sp"
             android:textStyle="bold" />
 
+        <!-- 历史最高分：常驻显示，与通关弹窗里的"历史最高"同源（均为数据库 MAX(score)） -->
+        <LinearLayout
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginStart="10dp"
+            android:gravity="center_vertical"
+            android:orientation="horizontal">
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="@string/parking_label_best"
+                android:textAppearance="@style/TextAppearance.Template.Caption" />
+
+            <TextView
+                android:id="@+id/tv_best"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="4dp"
+                android:text="0"
+                android:textAppearance="@style/TextAppearance.Template.CardTitle" />
+        </LinearLayout>
+
         <TextView
             android:id="@+id/tv_title"
             android:layout_width="0dp"

@@ -76,6 +76,7 @@ public final class ParkingEngine {
             Vehicle copy = prototype.copy();
             copy.place = Vehicle.PLACE_LOT;
             copy.loaded = 0;
+            copy.slot = -1;
             vehicles.add(copy);
         }
         queue.clear();
@@ -318,6 +319,8 @@ public final class ParkingEngine {
         int boarded = 0;
         List<BoardStep> boardSteps = Collections.emptyList();
         if (exits) {
+            // 先分配固定车位再上客：这样"刚驶出即对色"的车，其接客动画也停在它自己的车位上
+            v.slot = nextFreeSlot();
             v.place = Vehicle.PLACE_PICKUP;
             rebuildGrid();
             boardSteps = resolvePickup(v);
@@ -331,7 +334,7 @@ public final class ParkingEngine {
                 }
             }
             if (pickupSlot < 0 && v.inPickup()) {
-                pickupSlot = pickupIndex(v);
+                pickupSlot = v.slot;
             }
         } else {
             rebuildGrid();
@@ -427,12 +430,26 @@ public final class ParkingEngine {
     // 内部：规则
     // ==================================================================
 
-    /** 这辆车驶出后能否被接纳：要么正好匹配队首，要么接客区还有空位。 */
+    /**
+     * 这辆车驶出后能否被接纳。
+     * <p>
+     * 守卫的不变量：<b>接客区车辆数 ≤ {@link ParkingConfig#PICKUP_SLOTS}</b>。
+     * <ul>
+     *   <li>有空位 —— 放行，它最多停一个车位。</li>
+     *   <li>已满 —— 只允许"队首对色<b>且能被这一组装满</b>"的车驶出：它上完客立即开走，
+     *       全程不占车位。若只上了一部分客，它就得停下来等，那会突破车位上限，
+     *       因此这种情况不允许驶出。</li>
+     * </ul>
+     * 早期实现在"对色"时无条件放行，是因为当时上客即离场；
+     * 加了"必须满载才开走"之后，半载停留成为可能，这里必须补上车位约束。
+     */
     private boolean canAdmit(Vehicle v) {
-        if (!queue.isEmpty() && queue.get(0).colorIndex == v.colorIndex) {
+        if (getFreeSlots() > 0) {
             return true;
         }
-        return getFreeSlots() > 0;
+        return !queue.isEmpty()
+            && queue.get(0).colorIndex == v.colorIndex
+            && queue.get(0).count >= v.remainingCapacity();
     }
 
     /**
@@ -459,11 +476,19 @@ public final class ParkingEngine {
         while (!queue.isEmpty()) {
             PassengerGroup front = queue.get(0);
             Vehicle match = null;
-            for (Vehicle v : vehicles) {
-                // 已满载的车必然已经驶离，这里再判一次是防御：不重复给它上客
-                if (v.inPickup() && v.colorIndex == front.colorIndex && !v.isFull()) {
-                    match = v;
-                    break;
+            // 本次刚驶出的车<b>优先</b>上客。canAdmit 在"接客区已满"时正是据此判断
+            // "它会被这一组装满、随即开走、不占车位"；若被同色的等待车辆抢先，
+            // 它就可能半载停下，从而突破车位上限。
+            if (moved != null && moved.inPickup()
+                && moved.colorIndex == front.colorIndex && !moved.isFull()) {
+                match = moved;
+            } else {
+                for (Vehicle v : vehicles) {
+                    // 已满载的车必然已经驶离，这里再判一次是防御：不重复给它上客
+                    if (v.inPickup() && v.colorIndex == front.colorIndex && !v.isFull()) {
+                        match = v;
+                        break;
+                    }
                 }
             }
             if (match == null) {
@@ -481,12 +506,12 @@ public final class ParkingEngine {
                 // 未满载：留在接客区继续等客，不生成离场步骤
                 continue;
             }
-            // 所有被接客离场的车都走"停进接客位"路径：即便刚驶出即对色的那辆，
-            // 也先开进乘客区的接客位再上客，保证流程统一（车都先到乘客区接人）。
-            int slot = pickupIndex(match);
+            // 所有被接客离场的车都在<b>自己那个固定车位</b>上客后开走：
+            // 车位在进入时分配、离开前不变，故这里直接用它自己的车位，不存在横移。
             steps.add(new BoardStep(match.id, match.colorIndex, match.direction,
-                match.length, match.loaded, slot, false));
+                match.length, match.loaded, match.slot, false));
             match.place = Vehicle.PLACE_GONE;
+            match.slot = -1;   // 释放车位，供后续进入的车使用
         }
         return steps;
     }
@@ -551,18 +576,28 @@ public final class ParkingEngine {
         }
     }
 
-    /** 驶出并停在接客区的车排在第几个车位（渲染层靠它定位动画终点）。 */
-    private int pickupIndex(Vehicle v) {
-        int index = 0;
+    /**
+     * 分配一个空闲接客位：取<b>最小可用下标</b>，因此车辆按进入顺序从左到右排开。
+     * <p>
+     * 车位一旦分配就固定不变（存在 {@link Vehicle#slot}），直到该车驶离才释放。
+     * 这取代了早先"按 id 顺序实时重算"的做法——那种做法会让任何一辆车离开后
+     * 它右边的所有车整体左移一格，既打乱排列，也让上客动画出现横移。
+     *
+     * @return 车位下标；接客区已满时返回 {@code -1}（调用方只在 {@link #canAdmit} 为真时驶出，故不应发生）
+     */
+    private int nextFreeSlot() {
+        boolean[] used = new boolean[ParkingConfig.PICKUP_SLOTS];
         for (Vehicle other : vehicles) {
-            if (other.inPickup()) {
-                if (other.id == v.id) {
-                    return index;
-                }
-                index++;
+            if (other.inPickup() && other.slot >= 0 && other.slot < ParkingConfig.PICKUP_SLOTS) {
+                used[other.slot] = true;
             }
         }
-        return 0;
+        for (int i = 0; i < used.length; i++) {
+            if (!used[i]) {
+                return i;
+            }
+        }
+        return -1;
     }
 
     /** 沿 sign 方向数出最多能走几格（sign=1 沿箭头，-1 反向）。 */
@@ -638,12 +673,14 @@ public final class ParkingEngine {
         int[] cols = new int[n];
         int[] places = new int[n];
         int[] loaded = new int[n];
+        int[] slots = new int[n];
         for (int i = 0; i < n; i++) {
             Vehicle v = vehicles.get(i);
             rows[i] = v.row;
             cols[i] = v.col;
             places[i] = v.place;
             loaded[i] = v.loaded;
+            slots[i] = v.slot;
         }
         int q = queue.size();
         int[] colors = new int[q];
@@ -652,8 +689,8 @@ public final class ParkingEngine {
             colors[i] = queue.get(i).colorIndex;
             counts[i] = queue.get(i).count;
         }
-        return new Snapshot(rows, cols, places, loaded, colors, counts, score, passengersServed,
-            removesLeft, sortsLeft, totalPassengers, levelIndex, state);
+        return new Snapshot(rows, cols, places, loaded, slots, colors, counts, score,
+            passengersServed, removesLeft, sortsLeft, totalPassengers, levelIndex, state);
     }
 
     private static final class Snapshot {
@@ -662,6 +699,7 @@ public final class ParkingEngine {
         private final int[] cols;
         private final int[] places;
         private final int[] loaded;
+        private final int[] slots;
         private final int[] queueColors;
         private final int[] queueCounts;
         private final int score;
@@ -672,7 +710,7 @@ public final class ParkingEngine {
         private final int levelIndex;
         private final State state;
 
-        Snapshot(int[] rows, int[] cols, int[] places, int[] loaded,
+        Snapshot(int[] rows, int[] cols, int[] places, int[] loaded, int[] slots,
                  int[] queueColors, int[] queueCounts,
                  int score, int passengersServed, int removesLeft, int sortsLeft,
                  int totalPassengers, int levelIndex, State state) {
@@ -680,6 +718,7 @@ public final class ParkingEngine {
             this.cols = cols;
             this.places = places;
             this.loaded = loaded;
+            this.slots = slots;
             this.queueColors = queueColors;
             this.queueCounts = queueCounts;
             this.score = score;
@@ -699,6 +738,7 @@ public final class ParkingEngine {
                 v.col = cols[i];
                 v.place = places[i];
                 v.loaded = loaded[i];
+                v.slot = slots[i];
             }
             engine.queue.clear();
             for (int i = 0; i < queueColors.length; i++) {

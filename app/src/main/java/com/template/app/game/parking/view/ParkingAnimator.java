@@ -6,7 +6,6 @@ import com.template.app.game.parking.engine.MoveResult;
 import com.template.app.game.parking.model.Direction;
 import com.template.app.game.parking.model.Vehicle;
 
-import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -86,8 +85,15 @@ class ParkingAnimator {
 
     // ---- 接客离场编排（乘客逐个上车 → 车一辆辆开走）----
 
-    /** 待播放的离场车序列。 */
-    private final ArrayDeque<LeavingCar> boardQueue = new ArrayDeque<>();
+    /**
+     * 待播放的离场车序列。
+     * <p>
+     * 用 {@code List + 游标} 而非队列：绘制层要按索引访问"还没轮到播放的车"
+     * （把它们继续画在原车位上，见 {@link #waitingBoardAt(int)}），
+     * 而 {@code ArrayDeque} 的迭代会在 {@code onDraw} 里每次分配一个迭代器。
+     */
+    private final List<LeavingCar> boardQueue = new ArrayList<>();
+    private int boardCursor;
 
     /**
      * 已入队但还没到播放时刻的离场车（例如"刚驶出停车场的车先开进接客位、
@@ -95,7 +101,8 @@ class ParkingAnimator {
      * 放在动画状态机内部而非用 {@code postDelayed}，可避免"等待期 isAnimating 误判为
      * 已结束"的一帧空隙，从而让上层能可靠地等到所有车开走。
      */
-    private final ArrayDeque<LeavingCar> pendingBoardQueue = new ArrayDeque<>();
+    private final List<LeavingCar> pendingBoardQueue = new ArrayList<>();
+    private int pendingCursor;
     private long pendingBoardStart;
 
     /** 正在播放的那辆车；为 null 时若队列非空则下一帧取出。 */
@@ -109,6 +116,9 @@ class ParkingAnimator {
 
     /** 一辆离场车：语义 + 屏幕坐标（起点 / 上客点 / 离场终点）。全部由 View 在入队时算好。 */
     static final class LeavingCar {
+        /** 车辆 id，用于与"正在播放驶入接客位动画的那辆"比对，避免画出双重影像。 */
+        final int vehicleId;
+
         final int colorIndex;
         final Direction direction;
         final int length;
@@ -119,12 +129,13 @@ class ParkingAnimator {
         final float leaveX, leaveY, leaveAngle; // 离场终点：马路上自左向右开到右端屏幕外（angle=0）
         final float width, height;             // 车身尺寸（按上客点场景取棋盘/接客位尺度）
 
-        LeavingCar(int colorIndex, Direction direction, int length, int count,
+        LeavingCar(int vehicleId, int colorIndex, Direction direction, int length, int count,
                    float fromX, float fromY,
                    float spotX, float spotY, float spotAngle,
                    float roadX, float roadY,
                    float leaveX, float leaveY, float leaveAngle,
                    float width, float height) {
+            this.vehicleId = vehicleId;
             this.colorIndex = colorIndex;
             this.direction = direction;
             this.length = length;
@@ -156,20 +167,38 @@ class ParkingAnimator {
             return;
         }
         if (delayMs <= 0) {
-            for (LeavingCar car : cars) {
-                boardQueue.addLast(car);
-            }
+            boardQueue.addAll(cars);
             return;
         }
-        for (LeavingCar car : cars) {
-            pendingBoardQueue.addLast(car);
-        }
+        pendingBoardQueue.addAll(cars);
         pendingBoardStart = now() + delayMs;
     }
 
     /** 播放是否仍在进行（含队列里还没轮到的车，以及已入队但还没到播放时刻的车）。 */
     boolean hasBoardQueue() {
-        return activeBoard != null || !boardQueue.isEmpty() || !pendingBoardQueue.isEmpty();
+        return activeBoard != null
+            || pendingCursor < pendingBoardQueue.size()
+            || boardCursor < boardQueue.size();
+    }
+
+    /**
+     * 已接客、但<b>还没轮到播放</b>的离场车数量（含延迟等待期的）。
+     * <p>
+     * 这些车在引擎里已经是 {@code GONE}，但玩家还没看到它们上客开走，
+     * 绘制层必须把它们继续画在原来的接客位上——否则一次操作带走多辆时，
+     * 没轮到的车会凭空消失，等轮到自己才突然冒出来。
+     */
+    int waitingBoardCount() {
+        return (pendingBoardQueue.size() - pendingCursor)
+            + (boardQueue.size() - boardCursor);
+    }
+
+    /** 取第 i 辆还没轮到播放的离场车：先延迟等待期的，再正式队列的。 */
+    LeavingCar waitingBoardAt(int i) {
+        int pending = pendingBoardQueue.size() - pendingCursor;
+        return i < pending
+            ? pendingBoardQueue.get(pendingCursor + i)
+            : boardQueue.get(boardCursor + (i - pending));
     }
 
     /**
@@ -181,17 +210,13 @@ class ParkingAnimator {
      */
     void tickChoreography(long now) {
         // 等待期结束的离场车转进正式队列，保证"一辆辆开走"的接力不断档。
-        if (!pendingBoardQueue.isEmpty() && now >= pendingBoardStart) {
-            while (!pendingBoardQueue.isEmpty()) {
-                boardQueue.addLast(pendingBoardQueue.pollFirst());
-            }
+        if (pendingCursor < pendingBoardQueue.size() && now >= pendingBoardStart) {
+            boardQueue.addAll(pendingBoardQueue);
+            pendingBoardQueue.clear();
+            pendingCursor = 0;
         }
         if (activeBoard == null) {
-            if (!boardQueue.isEmpty()) {
-                activeBoard = boardQueue.pollFirst();
-                boardPhaseStart = now;
-                boardPhase = 0;
-            }
+            advanceBoard(now);
             return;
         }
         if (boardPhase == 0) {
@@ -208,11 +233,19 @@ class ParkingAnimator {
         } else if (now - boardPhaseStart >= ROAD_EXIT_MS) {
             activeBoard = null;
             boardPhase = 0;
-            if (!boardQueue.isEmpty()) {
-                activeBoard = boardQueue.pollFirst();
-                boardPhaseStart = now;
-                boardPhase = 0;
-            }
+            advanceBoard(now);
+        }
+    }
+
+    /** 取出下一辆开始播放；队列播完则整体清空，让游标归位以便下次入队。 */
+    private void advanceBoard(long now) {
+        if (boardCursor < boardQueue.size()) {
+            activeBoard = boardQueue.get(boardCursor++);
+            boardPhaseStart = now;
+            boardPhase = 0;
+        } else if (!boardQueue.isEmpty()) {
+            boardQueue.clear();
+            boardCursor = 0;
         }
     }
 

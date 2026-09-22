@@ -311,13 +311,17 @@ class ParkingRenderer {
             canvas.drawRoundRect(rect, radius, radius, slotDashPaint);
         }
 
-        int slot = 0;
-        for (int i = 0; i < engine.vehicleCount() && slot < ParkingConfig.PICKUP_SLOTS; i++) {
+        // 每辆车画在<b>它自己的固定车位</b>上（进入时分配、离开前不变），
+        // 不再按顺序紧凑排列——否则前面的车一走，后面的车就会集体左移。
+        for (int i = 0; i < engine.vehicleCount(); i++) {
             Vehicle v = engine.vehicleAt(i);
             if (!v.inPickup() || v.id == exitVehicleId) {
                 continue;
             }
-            float left = geometry.slotLeft(slot);
+            if (v.slot < 0 || v.slot >= ParkingConfig.PICKUP_SLOTS) {
+                continue;
+            }
+            float left = geometry.slotLeft(v.slot);
             float centerX = left + geometry.slotWidth / 2f;
             float centerY = top + height / 2f;
             float carWidth = geometry.slotWidth * 0.8f;
@@ -329,7 +333,22 @@ class ParkingRenderer {
                 drawSeatBadge(canvas, v.remainingCapacity(), centerX, centerY,
                     carWidth, carHeight, 0f);
             }
-            slot++;
+        }
+
+        // 已接客、但动画还没轮到播放的车：继续画在它们各自的接客位上。
+        // 引擎一次性把它们置为 GONE，而离场动画是排队逐辆播放的——
+        // 不补画这一段，没轮到的车就会凭空消失，等轮到自己才突然冒出来。
+        // 尺寸与"停放时"一致（接客位尺度），避免轮到播放时出现大小跳变。
+        for (int i = 0; i < anim.waitingBoardCount(); i++) {
+            ParkingAnimator.LeavingCar waiting = anim.waitingBoardAt(i);
+            // 刚驶出、正在播放"飞向接客位"的那辆由 drawExitingVehicle 绘制，
+            // 这里跳过它，否则会同时出现一个静止影像和一个飞行动影。
+            if (waiting.vehicleId == exitVehicleId) {
+                continue;
+            }
+            drawCarShape(canvas, waiting.direction, waiting.colorIndex,
+                waiting.fromX, waiting.fromY, waiting.spotAngle, 1f, 1f,
+                geometry.slotWidth * 0.8f, height * 0.5f);
         }
     }
 
