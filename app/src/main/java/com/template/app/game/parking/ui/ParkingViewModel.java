@@ -9,7 +9,9 @@ import androidx.lifecycle.LiveData;
 import androidx.lifecycle.MutableLiveData;
 
 import com.template.app.R;
+import com.template.app.data.AppDatabase;
 import com.template.app.data.GameRecordRepository;
+import com.template.app.data.ParkingLevelStore;
 import com.template.app.data.model.GameRecord;
 import com.template.app.game.parking.engine.BoardStep;
 import com.template.app.game.parking.engine.MoveResult;
@@ -38,6 +40,12 @@ public class ParkingViewModel extends AndroidViewModel {
     private final ParkingEngine engine = new ParkingEngine();
     private final ParkingLevelGenerator generator = new ParkingLevelGenerator();
     private final GameRecordRepository repository;
+
+    /**
+     * 关卡池门面。<b>懒创建</b>：Room 的打开不能发生在主线程，
+     * 因此只在后台线程首次取关时才初始化（DCL）。
+     */
+    private volatile ParkingLevelStore levelStore;
 
     /**
      * 关卡生成线程池。生成器最坏要跑数十万次状态展开，不能占用主线程。
@@ -178,7 +186,13 @@ public class ParkingViewModel extends AndroidViewModel {
         requestLevel(1);
     }
 
-    /** 请求生成第 levelIndex 关。生成在后台线程进行。 */
+    /**
+     * 请求第 levelIndex 关。全程在后台线程进行。
+     * <p>
+     * <b>优先命中关卡池</b>（docs/13）：一次 SELECT + 解析，毫秒级，
+     * 完全避开 BFS 求解——这是消除「过关/刷新必卡 0.2~3.7 秒」的关键。
+     * 池未命中（首次进入某难度桶）才回退在线生成，并把结果写回池完成自愈。
+     */
     public void requestLevel(int levelIndex) {
         if (Boolean.TRUE.equals(loading.getValue())) {
             return;
@@ -188,8 +202,36 @@ public class ParkingViewModel extends AndroidViewModel {
             // 生成器是 CPU/GC 大户：降权到后台优先级，确保主线程输入永远优先于生成，
             // 从根本上消除"生成拖垮 UI 导致 Input dispatching ANR"的风险。
             android.os.Process.setThreadPriority(android.os.Process.THREAD_PRIORITY_BACKGROUND);
-            levelEvent.postValue(generator.generate(levelIndex));
+            Level cached = levelStore().fetch(levelIndex);
+            if (cached != null) {
+                levelEvent.postValue(cached);
+                return;
+            }
+            Level generated = generator.generate(levelIndex);
+            levelStore().store(generated);
+            levelEvent.postValue(generated);
         });
+    }
+
+    /**
+     * 懒创建关卡池门面。
+     * <p>
+     * 必须在<b>后台线程</b>调用：{@link AppDatabase#getInstance} 会触发数据库打开，
+     * 放在主线程有卡顿风险。首次创建顺带清理配置漂移的存量关卡，并播种随包预置池。
+     */
+    private ParkingLevelStore levelStore() {
+        if (levelStore == null) {
+            synchronized (this) {
+                if (levelStore == null) {
+                    ParkingLevelStore store = new ParkingLevelStore(
+                        AppDatabase.getInstance(getApplication()).parkingLevelDao());
+                    store.pruneStale();
+                    store.seedFromAsset(getApplication());
+                    levelStore = store;
+                }
+            }
+        }
+        return levelStore;
     }
 
     /** 把后台生成的关卡套进引擎。必须在主线程调用。 */

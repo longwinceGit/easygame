@@ -12,8 +12,12 @@ public final class Constants {
     /** 数据库名称 */
     public static final String DATABASE_NAME = "game_hub.db";
 
-    /** 数据库版本 */
-    public static final int DATABASE_VERSION = 1;
+    /**
+     * 数据库版本。
+     * v2：新增挪车消消消的关卡池表 {@code parking_levels}（docs/13）。
+     * 升版必须同时在 {@code AppDatabase} 提供对应 Migration，否则已装用户会崩溃。
+     */
+    public static final int DATABASE_VERSION = 2;
 
     /** 拖拽方块的唯一 ID，同时作为存档表中的 game_id */
     public static final String GAME_ID_TETRIS = "tetris";

@@ -75,6 +75,36 @@ public final class ParkingConfig {
         return vehicleCount(levelIndex) + Math.min(3, 1 + levelIndex / 4);
     }
 
+    /**
+     * 难度桶：车数与额外步数要求共同决定关卡的「难度档」。
+     * <p>
+     * 关卡号无限递增，但 {@link #vehicleCount} 在 L6+ 饱和到 10、
+     * {@link #minSolutionMoves} 在 L8+ 饱和，故桶只有有限几个（docs/13 §3.1）。
+     * 同一桶内的关卡可互相替换，这是「有限关卡池服务无限关卡号」的基础。
+     */
+    public static int bucketOf(int levelIndex) {
+        int count = vehicleCount(levelIndex);
+        return count * 10 + (minSolutionMoves(levelIndex) - count);
+    }
+
+    /**
+     * 配置指纹：决定存量关卡是否仍然<b>合法</b>的常量哈希。
+     * <p>
+     * 关卡落库缓存后，若几何/颜色常量变化，旧布局可能越界崩溃
+     * （例：{@code COLUMNS} 缩小 → {@code col + length > COLUMNS}；
+     * {@code COLOR_COUNT} 减小 → {@code colorIndex} 越界）。
+     * 这些常量参与计算，任一改动都会改变本值，从而使旧池自动失效（docs/13 §5.1）。
+     */
+    public static int configVersion() {
+        int v = 1;
+        v = v * 31 + ROWS;
+        v = v * 31 + COLUMNS;
+        v = v * 31 + COLOR_COUNT;
+        v = v * 31 + MAX_VEHICLES;
+        v = v * 31 + PICKUP_SLOTS;
+        return v;
+    }
+
     private static int clamp(int value, int min, int max) {
         return Math.max(min, Math.min(max, value));
     }
