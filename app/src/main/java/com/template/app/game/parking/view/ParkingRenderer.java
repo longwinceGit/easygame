@@ -227,32 +227,48 @@ class ParkingRenderer {
         float baseline = top + height * 0.56f;
         float startX = signLeft + signWidth + 10f * geometry.density;
 
-        // 正在上客：把"还没上车的乘客"作为半透明小人放在<b>队首（左边）</b>，
-        // 随上车从左到右一个个消失——视觉上就是"队列最前的人正在上车"。
-        int pending = 0;
-        int pendingColor = 0;
-        int boardCount = 0;
-        if (anim.isBoardingActive() && !anim.isLeaving(now)) {
-            boardCount = anim.boardCount();
+        // 正在上客的乘客：引擎已把它们从队列里扣掉，但动画还没播到，
+        // 必须继续画在队首并随上车逐个消失——否则会"凭空蒸发"。
+        // <b>关键点</b>：一次操作可能带走多辆车，没轮到播放的那几车乘客<b>一个都还没上车</b>，
+        // 整段都要保留（与车辆同理：等待播放的车也继续画在接客位上）。
+        int visibleBoarding = 0;
+        float x = startX;
+        if (anim.isBoardingActive()) {
+            int boardCount = anim.boardCount();
             int boarded = anim.boardedSoFar(now);
-            pending = boardCount - boarded;
-            pendingColor = anim.boardColorIndex();
+            int pending = boardCount - boarded;
+            visibleBoarding = Math.max(0, pending);
+            if (pending > 0) {
+                // 已上车的从左侧空出，未上车的排在右侧并向中心收缩——队首的人先被接走
+                passengerPaint.setColor(passengerColors[anim.boardColorIndex()]);
+                passengerPaint.setAlpha(178);
+                float px = x + boarded * step;
+                for (int k = 0; k < pending; k++) {
+                    drawPassenger(canvas, px, baseline, icon);
+                    px += step;
+                }
+                passengerPaint.setAlpha(255);
+            }
+            // 无论是否还在上客阶段都占位，避免车转入"开走"阶段时队列整体左跳
+            x += boardCount * step;
         }
-        if (pending > 0) {
-            // 固定占用队首 [startX, startX + boardCount*step] 这一段；
-            // 已上车的留在最左，未上车的排在右侧并向中心收缩，最靠近车的先被接走。
-            float clusterRight = startX + boardCount * step;
-            float px = clusterRight - pending * step;
-            passengerPaint.setColor(passengerColors[pendingColor]);
+        for (int i = 0; i < anim.waitingBoardCount(); i++) {
+            ParkingAnimator.LeavingCar waiting = anim.waitingBoardAt(i);
+            passengerPaint.setColor(passengerColors[waiting.colorIndex]);
             passengerPaint.setAlpha(178);
-            for (int k = 0; k < pending; k++) {
+            float px = x;
+            for (int k = 0; k < waiting.count; k++) {
                 drawPassenger(canvas, px, baseline, icon);
                 px += step;
             }
             passengerPaint.setAlpha(255);
+            x += waiting.count * step;
+            visibleBoarding += waiting.count;
+        }
+        if (visibleBoarding > 0 || anim.isBoardingActive()) {
+            x += groupGap;
         }
 
-        float x = startX + (boardCount > 0 ? boardCount * step + groupGap : 0f);
         int drawn = 0;
         int frontDrawn = 0;
         for (int i = 0; i < engine.queueSize() && drawn < MAX_PASSENGER_ICONS; i++) {
@@ -271,7 +287,7 @@ class ParkingRenderer {
         }
 
         // 队首高亮：覆盖"正在上客的小人 + 真实队首"，明确"现在要接的是它"
-        int highlightCount = (pending > 0 ? boardCount : 0) + frontDrawn;
+        int highlightCount = visibleBoarding + frontDrawn;
         if (highlightCount > 0) {
             float lineY = top + height - 5f * geometry.density;
             canvas.drawLine(startX, lineY, startX + highlightCount * step, lineY, accentPaint);
