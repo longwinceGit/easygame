@@ -15,13 +15,16 @@ public final class ParkingConfig {
     /**
      * 停车场列数。
      * <p>
-     * 8×8：格子更多 → 单个格子更小 → 车辆图标随之变小（视觉诉求），
+     * 10×10：格子更多 → 单个格子更小 → 车辆图标随之变小（视觉诉求），
      * 同时给"更多车"留出空间（难度诉求）。
+     * <p>
+     * <b>改这个数会连带影响求解器的状态编码</b>：锚点 {@code row × COLUMNS + col}
+     * 必须能被 {@code ParkingLevelGenerator} 的每车位宽装下，详见该类。
      */
-    public static final int COLUMNS = 8;
+    public static final int COLUMNS = 10;
 
     /** 停车场行数。 */
-    public static final int ROWS = 8;
+    public static final int ROWS = 10;
 
     /** 接客区车位数——全局难度总闸。 */
     public static final int PICKUP_SLOTS = 4;
@@ -50,8 +53,14 @@ public final class ParkingConfig {
     /** 关卡生成：单次 BFS 访问状态上限。8×8 棋盘下每辆车一次提取的上限。 */
     public static final int GENERATOR_MAX_BFS_STATES = 5000;
 
-    /** 单关最多车辆数。求解器用 String 编码状态，不受 64 bit 限制。 */
-    public static final int MAX_VEHICLES = 10;
+    /**
+     * 单关最多车辆数。
+     * <p>
+     * <b>与状态编码强耦合</b>：求解器按每车 8 bit 打包锚点、并用<b>两个 long</b>（128 bit）
+     * 表示一个局面，故上限 16 辆；当前取 12。
+     * （10×10 的锚点范围是 0..99，最少也要 7 bit，单 long 最多只放得下 9 辆。）
+     */
+    public static final int MAX_VEHICLES = 12;
 
     /**
      * 车辆数量：L1=5 → L2=6 → L3=7 → L4=8 → L5=9 → L6+=10。
@@ -72,7 +81,21 @@ public final class ParkingConfig {
      * 关卡越深，要求的额外步数越多，但上限刻意压低——否则会逼出海量重试拖垮生成耗时。
      */
     public static int minSolutionMoves(int levelIndex) {
-        return vehicleCount(levelIndex) + Math.min(3, 1 + levelIndex / 4);
+        return minSolutionMovesFor(vehicleCount(levelIndex), levelIndex);
+    }
+
+    /**
+     * 难度门槛：整关最少需要的操作数，按<b>实际车数</b>计算。
+     * <p>
+     * 生成器拒绝"每辆车都能直接开走"的布局（那种局面操作数 == 车辆数，太简单）。
+     * 关卡越深，要求的额外步数越多，但上限刻意压低——否则会逼出海量重试拖垮生成耗时。
+     * <p>
+     * <b>必须用实际车数而非 {@link #vehicleCount(int)}</b>：
+     * 生成器在"降车重试"时车数会低于该关目标值，若门槛仍按目标车数算成绝对步数，
+     * 车少了却要求同样多步数 → 几乎必然失败 → 一路掉到保底关。
+     */
+    public static int minSolutionMovesFor(int vehicleCount, int levelIndex) {
+        return vehicleCount + Math.min(3, 1 + levelIndex / 4);
     }
 
     /**

@@ -84,9 +84,11 @@ public final class ParkingLevelGenerator {
             return null;
         }
         Solution solution = solve(layout, vehicleCount);
-        // 质量门：拒绝"每辆车都能直接开走"的布局——那种局面点 N 下就通关，太简单
+        // 质量门：拒绝"每辆车都能直接开走"的布局——那种局面点 N 下就通关，太简单。
+        // 门槛按<b>实际车数</b>算：降车重试时门槛同步下降，否则车少了却仍要求同样的
+        // 绝对步数，会让所有降车尝试都失败、直接掉进 2 车保底关。
         if (solution == null
-            || solution.totalMoves < ParkingConfig.minSolutionMoves(levelIndex)) {
+            || solution.totalMoves < ParkingConfig.minSolutionMovesFor(vehicleCount, levelIndex)) {
             return null;
         }
         return new Level(levelIndex, layout, buildQueue(layout, solution.order));
@@ -261,12 +263,23 @@ public final class ParkingLevelGenerator {
             }
         }
 
+        /** 每辆车锚点占的位数。10×10 棋盘锚点 0..99，取 8 bit（1 字节）对齐便于拆分。 */
+        private static final int BITS_PER_VEHICLE = 8;
+
+        private static final int FIELD_MASK = 0xFF;
+
+        /**
+         * 低 64 位（lo）放第 0..7 辆；第 8 辆起放高 64 位（hi）。
+         * 12 辆车时 hi 只用 32 位，故上限 16 辆，与 {@link ParkingConfig#MAX_VEHICLES} 一致。
+         */
+        private static final int LOW_VEHICLES = 8;
+
         /**
          * 搜索"把 target 沿箭头开出边界"的最短操作序列。
          * <p>
          * 热路径<b>零对象分配</b>：访问集用原始 long 开放寻址集合（避免每状态一次
-         * {@code Long} 装箱），局面用 long 编码，子节点由父局面的 long 直接改写对应车辆
-         * 的 6-bit 字段得到——不再为每辆车克隆 {@code int[]}，也不再新建 {@code Node}。
+         * {@code Long} 装箱），局面用<b>两个 long</b> 编码，子节点由父局面直接改写对应车辆
+         * 的字节字段得到——不再为每辆车克隆 {@code int[]}，也不再新建 {@code Node}。
          * 仅命中目标时解一次码、生成一份终局锚点。这正是压住"整机 CPU/页错误飙升、
          * 主线程被拖垮"的最后一块短板。
          *
@@ -274,22 +287,25 @@ public final class ParkingLevelGenerator {
          */
         Node extract(int target, int[] start, boolean[] gone) {
             int n = size;
-            LongSet visited = new LongSet(ParkingConfig.GENERATOR_MAX_BFS_STATES);
+            StateSet visited = new StateSet(ParkingConfig.GENERATOR_MAX_BFS_STATES);
             // 数组尺寸按"状态数预算"分配：根 + 至多 GENERATOR_MAX_BFS_STATES 个后继。
             // 真正的预算上限是<b>入队状态数</b>（由下方 tail 守卫强制），而非出队扩展次数，
             // 否则一个状态扩展可生成多个后继，入队总数会远超数组容量导致越界。
             int cap = ParkingConfig.GENERATOR_MAX_BFS_STATES + 1;
             int[] frontier = new int[cap];
-            long[] states = new long[cap];
+            long[] statesLo = new long[cap];
+            long[] statesHi = new long[cap];
             int[] depthArr = new int[cap];
-            int[] anchors = new int[n]; // 可复用的解码 scratch
+            int[] anchors = new int[n];     // 可复用的解码 scratch
+            long[] packed = new long[2];    // 可复用的编码 scratch：packed[0]=lo, [1]=hi
 
-            int root = 0;
-            states[root] = pack(start);
-            depthArr[root] = 0;
-            visited.add(states[root]);
+            pack(start, packed);
+            statesLo[0] = packed[0];
+            statesHi[0] = packed[1];
+            depthArr[0] = 0;
+            visited.add(statesLo[0], statesHi[0]);
             int head = 0, tail = 0;
-            frontier[tail++] = root;
+            frontier[tail++] = 0;
 
             int expanded = 0;
             while (head < tail) {
@@ -297,10 +313,11 @@ public final class ParkingLevelGenerator {
                     return null;
                 }
                 int cur = frontier[head++];
-                long curState = states[cur];
-                unpack(curState, anchors);
+                long curLo = statesLo[cur];
+                long curHi = statesHi[cur];
+                unpack(curLo, curHi, anchors);
                 if (boundary(target, anchors) == 0) {
-                    return new Node(unpackClone(curState, n), depthArr[cur]);
+                    return new Node(anchors.clone(), depthArr[cur]);
                 }
                 for (int i = 0; i < n; i++) {
                     if (gone[i]) {
@@ -314,16 +331,28 @@ public final class ParkingLevelGenerator {
                         }
                         int delta = steps * sign
                             * (dirRow[i] * ParkingConfig.COLUMNS + dirCol[i]);
-                        int shift = i * 6;
-                        int newField = ((int) ((curState >>> shift) & 0x3FL) + delta) & 0x3F;
-                        long nextState = (curState & ~(0x3FL << shift))
-                            | ((long) newField << shift);
-                        if (visited.add(nextState)) {
+                        long nextLo = curLo;
+                        long nextHi = curHi;
+                        if (i < LOW_VEHICLES) {
+                            int shift = i * BITS_PER_VEHICLE;
+                            int field = ((int) ((curLo >>> shift) & FIELD_MASK) + delta)
+                                & FIELD_MASK;
+                            nextLo = (curLo & ~((long) FIELD_MASK << shift))
+                                | ((long) field << shift);
+                        } else {
+                            int shift = (i - LOW_VEHICLES) * BITS_PER_VEHICLE;
+                            int field = ((int) ((curHi >>> shift) & FIELD_MASK) + delta)
+                                & FIELD_MASK;
+                            nextHi = (curHi & ~((long) FIELD_MASK << shift))
+                                | ((long) field << shift);
+                        }
+                        if (visited.add(nextLo, nextHi)) {
                             if (tail >= cap) {
                                 return null; // 状态数预算耗尽，放弃本次求解
                             }
                             int node = tail;
-                            states[node] = nextState;
+                            statesLo[node] = nextLo;
+                            statesHi[node] = nextHi;
                             depthArr[node] = depthArr[cur] + 1;
                             frontier[tail++] = node;
                         }
@@ -333,18 +362,13 @@ public final class ParkingLevelGenerator {
             return null;
         }
 
-        /** 把 long 局面解码进复用缓存 out。 */
-        private static void unpack(long state, int[] out) {
+        /** 把局面 (lo, hi) 解码进复用缓存 out。 */
+        private static void unpack(long lo, long hi, int[] out) {
             for (int i = 0; i < out.length; i++) {
-                out[i] = (int) ((state >>> (i * 6)) & 0x3FL);
+                out[i] = i < LOW_VEHICLES
+                    ? (int) ((lo >>> (i * BITS_PER_VEHICLE)) & FIELD_MASK)
+                    : (int) ((hi >>> ((i - LOW_VEHICLES) * BITS_PER_VEHICLE)) & FIELD_MASK);
             }
-        }
-
-        /** 解码出一份新的 int[] 锚点（仅命中目标时调用）。 */
-        private static int[] unpackClone(long state, int size) {
-            int[] out = new int[size];
-            unpack(state, out);
-            return out;
         }
 
         private int maxSteps(int[] anchors, boolean[] gone, int index, int sign, int target) {
@@ -424,47 +448,71 @@ public final class ParkingLevelGenerator {
         }
 
         /**
-         * 状态编码为 long：每车 6 bit 锚点（0..63），最多 10 车 = 60 bit，恰好塞进 long。
-         * 单次 extract 内 gone 不变，故无需编码 gone，仅锚点即可唯一确定局面。
+         * 把锚点数组打包成两个 long：{@code out[0]=lo}（第 0..7 辆）、{@code out[1]=hi}（第 8 辆起）。
          * <p>
-         * 相比原先的 StringBuilder+String，避免了 BFS 热路径上每个状态一次 String 分配，
-         * 大幅降低 GC 压力——这正是打开游戏时整机 CPU/页错误飙升、主线程被拖垮的根因。
+         * <b>为什么不再用单 long</b>：8×8 时锚点 0..63 只要 6 bit，10 车 = 60 bit 恰好塞得下；
+         * 但 10×10 棋盘锚点是 0..99，每车最少 7 bit，12 辆车 = 84 bit <b>超出 long 的 64 位</b>。
+         * 故改为每车 8 bit（1 字节对齐）+ 两个 long，上限 16 辆车。
+         * <p>
+         * 单次 extract 内 gone 不变，故无需编码 gone，仅锚点即可唯一确定局面。
+         * 相比 StringBuilder+String，热路径上依然<b>零对象分配</b>——
+         * 这正是压住"整机 CPU/页错误飙升、主线程被拖垮"的关键。
          */
-        private long pack(int[] anchors) {
-            long state = 0L;
+        private void pack(int[] anchors, long[] out) {
+            long lo = 0L;
+            long hi = 0L;
             for (int i = 0; i < size; i++) {
-                state = (state << 6) | (anchors[i] & 0x3FL);
+                long field = anchors[i] & FIELD_MASK;
+                if (i < LOW_VEHICLES) {
+                    lo |= field << (i * BITS_PER_VEHICLE);
+                } else {
+                    hi |= field << ((i - LOW_VEHICLES) * BITS_PER_VEHICLE);
+                }
             }
-            return state;
+            out[0] = lo;
+            out[1] = hi;
         }
     }
 
-    /** 原始 long 开放寻址集合：避免 BFS 热路径上每个状态一次 {@code Long} 装箱分配。 */
-    private static final class LongSet {
-        private final long[] table;
+    /**
+     * 双 long 开放寻址集合（BFS 访问集）：避免热路径上每个状态一次对象分配。
+     * <p>
+     * 10×10 + 最多 12 辆车的状态需要 {@code (lo, hi)} 两个 long 表示，
+     * 所以键是两个 long；空槽用 {@code keysLo[idx] == 0} 表示（真实键翻转了 lo 的最高位，恒非 0）。
+     */
+    private static final class StateSet {
+        private final long[] keysLo;
+        private final long[] keysHi;
         private final int mask;
 
-        LongSet(int maxStates) {
+        StateSet(int maxStates) {
             int cap = 1;
             while (cap <= maxStates * 2) {
                 cap <<= 1;
             }
-            table = new long[cap];
+            keysLo = new long[cap];
+            keysHi = new long[cap];
             mask = cap - 1;
         }
 
         /** @return true 表示首次加入（之前不存在）。 */
-        boolean add(long state) {
-            long key = state ^ Long.MIN_VALUE; // 翻转最高位：真实状态永不等于空槽 0
-            int idx = (int) (key & mask);
-            while (table[idx] != 0L) {
-                if (table[idx] == key) {
+        boolean add(long lo, long hi) {
+            long key = lo ^ Long.MIN_VALUE; // 翻转最高位：真实状态永不等于空槽 0
+            int idx = (int) (mix(key, hi) & mask);
+            while (keysLo[idx] != 0L) {
+                if (keysLo[idx] == key && keysHi[idx] == hi) {
                     return false;
                 }
                 idx = (idx + 1) & mask;
             }
-            table[idx] = key;
+            keysLo[idx] = key;
+            keysHi[idx] = hi;
             return true;
+        }
+
+        /** 把两个 long 混成一个下标：只按 lo 散列会让分布不均（hi 变化时下标不变）。 */
+        private static long mix(long lo, long hi) {
+            return lo ^ (hi * 0x9E3779B97F4A7C15L);
         }
     }
 

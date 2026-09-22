@@ -18,8 +18,12 @@ class ParkingGeometry {
     /** 棋盘旋转角，负值为逆时针。参考截图约为 -25°，取 -22° 兼顾观感与可读性。 */
     static final float ROTATION_DEGREES = -22f;
 
-    /** 8×8 棋盘旋转后的外接盒约 10.4 格，小屏上格子会压到 30dp 上下，下限放宽到 26 避免被裁切。 */
-    static final float MIN_CELL_DP = 26f;
+    /**
+     * 棋盘旋转后外接盒：8×8 约 10.4 格，10×10 约 13.0 格。
+     * 格子下限放宽到 22dp——棋盘变大后若仍用 26dp，小屏（约 360dp 宽）上
+     * 外接盒会超出可用宽度而被裁切；22dp 保证 13 格 × 22dp ≈ 286dp 仍能放下。
+     */
+    static final float MIN_CELL_DP = 22f;
 
     static final float QUEUE_HEIGHT_DP = 46f;
     static final float PICKUP_HEIGHT_DP = 62f;

@@ -382,6 +382,13 @@ class ParkingRenderer {
                                float width, float height, float angleDegrees) {
         canvas.save();
         canvas.rotate(angleDegrees, centerX, centerY);
+        // 字号随车身尺寸缩放：棋盘变大后格子变小（10×10 时约 22dp），
+        // 固定字号会挤爆车身，故按车的短边取比例并夹紧到可读区间。
+        float size = Math.max(8f * geometry.density,
+            Math.min(16f * geometry.density, Math.min(width, height) * 0.42f));
+        seatTextPaint.setTextSize(size);
+        seatTextOutlinePaint.setTextSize(size);
+        seatTextOutlinePaint.setStrokeWidth(size * 0.22f);
         float bx = centerX + width * 0.28f;
         float by = centerY - height * 0.30f;
         // 基线垂直居中：ascent 为负、descent 为正，取二者中值抵消
