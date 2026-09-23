@@ -70,6 +70,7 @@
     <string name="parking_hint">点击车辆，它会沿箭头开到底并驶出停车场。先挪开挡路的车，让队首颜色的车先出去</string>
     <string name="parking_board_description">挪车消消消棋盘：上方是乘客队列与接客区，下方是停车场</string>
     <string name="parking_announce_boarded">接走 %1$d 位乘客</string>
+    <string name="parking_combo_announce">连击！一次送走 %1$d 辆车，奖励 %2$d 分</string>
     <string name="parking_announce_parked">车辆驶入接客区，剩余 %1$d 个车位</string>
     <string name="parking_announce_front">队首是 %1$d 位%2$s色乘客</string>
     <string name="parking_announce_state">第 %1$d 关，还剩 %2$d 位乘客，接客区剩余 %3$d 个车位。%4$s</string>

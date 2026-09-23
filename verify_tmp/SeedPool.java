@@ -22,14 +22,22 @@ import java.util.List;
  */
 public final class SeedPool {
 
-    /** 每桶预生成条数。池越大越不容易重复暴露，代价只是包体几十 KB。 */
-    private static final int PER_BUCKET = 40;
+    /** 每桶预生成条数。池越大越不容易重复暴露；同时按耗时控制单次构建时长。 */
+    private static final int PER_BUCKET = 12;
 
     /**
-     * 每个桶取一个代表关卡号。
+     * 每个桶取一个代表关卡号：覆盖车数从 {@code START_VEHICLES} 涨到 {@code MAX_VEHICLES} 的每一档。
      * 桶由 (车数, 最少步数) 决定，桶内这些值一致，故用哪个关卡号生成都合法。
      */
-    private static final int[] REPRESENTATIVE_LEVELS = {1, 2, 3, 4, 5, 6, 8};
+    private static int[] representativeLevels() {
+        // vehicleCount(L) = clamp(START + (L-1), 5, MAX) → 爬坡段长度
+        int ramp = ParkingConfig.MAX_VEHICLES - ParkingConfig.START_VEHICLES + 1;
+        int[] levels = new int[ramp];
+        for (int i = 0; i < ramp; i++) {
+            levels[i] = i + 1;
+        }
+        return levels;
+    }
 
     public static void main(String[] args) throws Exception {
         String out = args.length > 0
@@ -39,7 +47,7 @@ public final class SeedPool {
         List<String> lines = new ArrayList<>();
         long totalStart = System.currentTimeMillis();
 
-        for (int levelIndex : REPRESENTATIVE_LEVELS) {
+        for (int levelIndex : representativeLevels()) {
             ParkingLevelGenerator generator =
                 new ParkingLevelGenerator(20260922L + levelIndex);
             int bucket = ParkingConfig.bucketOf(levelIndex);

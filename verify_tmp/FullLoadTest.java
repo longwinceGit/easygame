@@ -144,8 +144,9 @@ public final class FullLoadTest {
         if (engine.getState() == ParkingEngine.State.SOLVED) {
             return true;
         }
-        if (engine.getState() == ParkingEngine.State.STUCK || depth >= 22
-            || visited.size() >= 400000) {
+        // 10×10 棋盘 + 最多 12 辆车的状态空间远大于 8×8，上限需相应放宽
+        if (engine.getState() == ParkingEngine.State.STUCK || depth >= 34
+            || visited.size() >= 1500000) {
             return false;
         }
         String key = stateKey(engine);

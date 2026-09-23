@@ -79,8 +79,8 @@ public final class CodecTest {
             null, "", "abc", "0,0,2", "0,0,2,0,0",                 // 字段数不对
             "0,0,2,0,0,99",                                          // colorIndex 越界
             "-1,0,2,0,0,0",                                          // row 越界
-            "0,7,2,1,3,0",                                           // 横向 col+len 越界
-            "7,0,2,0,1,0",                                           // 纵向 row+len 越界
+            "0,9,2,1,3,0",                                           // 横向 col+len 越界（10 列）
+            "9,0,2,0,1,0",                                           // 纵向 row+len 越界（10 行）
             "0,0,9,0,0,0",                                           // length 非法
         };
         for (String bad : badLayouts) {
@@ -115,9 +115,11 @@ public final class CodecTest {
             }
         }
         System.out.println("distinct buckets over L1..L30 = " + changes + ":" + sb);
-        if (changes > 8) {
+        // 桶数应等于车数爬坡段长度（首关 → 封顶，每关 +1），超过说明没有饱和
+        int ramp = ParkingConfig.MAX_VEHICLES - ParkingConfig.START_VEHICLES + 1;
+        if (changes > ramp) {
             fail++;
-            System.out.println("bucket count unexpectedly large: " + changes);
+            System.out.println("bucket count " + changes + " exceeds ramp " + ramp);
         }
         System.out.println("configVersion = " + ParkingConfig.configVersion());
     }

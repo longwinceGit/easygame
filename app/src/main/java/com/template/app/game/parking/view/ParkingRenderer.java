@@ -56,6 +56,7 @@ class ParkingRenderer {
     private final Paint arrowOutlinePaint = new Paint(Paint.ANTI_ALIAS_FLAG);
     private final Paint accentPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
     private final Paint popupPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
+    private final Paint comboPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
     private final Paint roadPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
     private final Paint roadLinePaint = new Paint(Paint.ANTI_ALIAS_FLAG);
     private final Paint roadArrowPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
@@ -141,6 +142,12 @@ class ParkingRenderer {
         popupPaint.setTextSize(16f * density);
         popupPaint.setFakeBoldText(true);
 
+        // 连击浮字：比普通浮字更大更醒目，用强调色，置于接客区上方独立位置避免重叠
+        comboPaint.setColor(accentColor);
+        comboPaint.setTextAlign(Paint.Align.CENTER);
+        comboPaint.setTextSize(22f * density);
+        comboPaint.setFakeBoldText(true);
+
         roadPaint.setStyle(Paint.Style.FILL);
         roadPaint.setColor(ContextCompat.getColor(context, R.color.game_parking_road_bg));
 
@@ -192,6 +199,7 @@ class ParkingRenderer {
         drawExitingVehicle(canvas, anim, now);
         drawBoardingCar(canvas, anim, now);
         drawPopup(canvas, anim, now);
+        drawComboPopup(canvas, anim, now);
     }
 
     boolean isAnimating(ParkingAnimator anim) {
@@ -231,42 +239,24 @@ class ParkingRenderer {
         // 必须继续画在队首并随上车逐个消失——否则会"凭空蒸发"。
         // <b>关键点</b>：一次操作可能带走多辆车，没轮到播放的那几车乘客<b>一个都还没上车</b>，
         // 整段都要保留（与车辆同理：等待播放的车也继续画在接客位上）。
-        int visibleBoarding = 0;
+        // 模型：当前正在上客的车画在队首（只此一辆，最多 3 格，不会把后面队列推远）；
+        // 等待播放上客的车画在队列【尾部】——既不凭空消失，也不占用队首把整体推右。
+        // 这样整条队列除"当前这辆车"外始终锚定，避免了"一接客就被推到右边再慢慢退回"的右漂。
         float x = startX;
+        int visibleBoarding = 0;
+
         if (anim.isBoardingActive()) {
-            int boardCount = anim.boardCount();
-            int boarded = anim.boardedSoFar(now);
-            int pending = boardCount - boarded;
-            visibleBoarding = Math.max(0, pending);
+            int pending = Math.max(0, anim.boardCount() - anim.boardedSoFar(now));
+            visibleBoarding = pending;
             if (pending > 0) {
-                // 已上车的从左侧空出，未上车的排在右侧并向中心收缩——队首的人先被接走
                 passengerPaint.setColor(passengerColors[anim.boardColorIndex()]);
                 passengerPaint.setAlpha(178);
-                float px = x + boarded * step;
                 for (int k = 0; k < pending; k++) {
-                    drawPassenger(canvas, px, baseline, icon);
-                    px += step;
+                    drawPassenger(canvas, x, baseline, icon);
+                    x += step;
                 }
                 passengerPaint.setAlpha(255);
             }
-            // 无论是否还在上客阶段都占位，避免车转入"开走"阶段时队列整体左跳
-            x += boardCount * step;
-        }
-        for (int i = 0; i < anim.waitingBoardCount(); i++) {
-            ParkingAnimator.LeavingCar waiting = anim.waitingBoardAt(i);
-            passengerPaint.setColor(passengerColors[waiting.colorIndex]);
-            passengerPaint.setAlpha(178);
-            float px = x;
-            for (int k = 0; k < waiting.count; k++) {
-                drawPassenger(canvas, px, baseline, icon);
-                px += step;
-            }
-            passengerPaint.setAlpha(255);
-            x += waiting.count * step;
-            visibleBoarding += waiting.count;
-        }
-        if (visibleBoarding > 0 || anim.isBoardingActive()) {
-            x += groupGap;
         }
 
         int drawn = 0;
@@ -284,6 +274,19 @@ class ParkingRenderer {
                 frontDrawn = drawn - before;
             }
             x += groupGap;
+        }
+
+        // 等待上客的车：排在队列尾部，避免占用队首把整体推右
+        for (int i = 0; i < anim.waitingBoardCount(); i++) {
+            ParkingAnimator.LeavingCar waiting = anim.waitingBoardAt(i);
+            passengerPaint.setColor(passengerColors[waiting.colorIndex]);
+            passengerPaint.setAlpha(178);
+            for (int k = 0; k < waiting.count && drawn < MAX_PASSENGER_ICONS; k++) {
+                drawPassenger(canvas, x, baseline, icon);
+                x += step;
+                drawn++;
+            }
+            passengerPaint.setAlpha(255);
         }
 
         // 队首高亮：覆盖"正在上客的小人 + 真实队首"，明确"现在要接的是它"
@@ -731,6 +734,22 @@ class ParkingRenderer {
             geometry.pickupTop + geometry.pickupHeight * 0.62f - rise,
             popupPaint);
         popupPaint.setAlpha(255);
+    }
+
+    private void drawComboPopup(Canvas canvas, ParkingAnimator anim, long now) {
+        if (!anim.isComboAnimating(now)) {
+            return;
+        }
+        float progress = (now - anim.comboStart) / (float) ParkingAnimator.POPUP_DURATION_MS;
+        float alpha = Math.max(0f, 1f - progress);
+        // 比普通浮字升得更高，避免与 "+分数" 浮字重叠
+        float rise = 60f * geometry.density * easeOutCubic(progress);
+        comboPaint.setAlpha((int) (255f * alpha));
+        canvas.drawText(anim.comboText,
+            geometry.stripLeft + geometry.stripWidth / 2f,
+            geometry.pickupTop + geometry.pickupHeight * 0.28f - rise,
+            comboPaint);
+        comboPaint.setAlpha(255);
     }
 
     // ==================================================================

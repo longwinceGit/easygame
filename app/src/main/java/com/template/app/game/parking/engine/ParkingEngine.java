@@ -539,6 +539,10 @@ public final class ParkingEngine {
             match.place = Vehicle.PLACE_GONE;
             match.slot = -1;   // 释放车位，供后续进入的车使用
         }
+        // 连击：本次操作一次送走 ≥2 辆车，每多送 1 辆额外加分
+        if (steps.size() >= 2) {
+            score += ParkingConfig.SCORE_COMBO_PER_EXTRA * (steps.size() - 1);
+        }
         return steps;
     }
 

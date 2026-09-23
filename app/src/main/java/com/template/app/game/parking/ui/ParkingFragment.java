@@ -289,6 +289,7 @@ public class ParkingFragment extends Fragment {
             announce(getString(R.string.parking_announce_parked,
                 viewModel.getEngine().getFreeSlots()));
         }
+        showComboIfAny(result.boardSteps);
         binding.parkingView.performHapticFeedback(result.boarded > 0
             ? HapticFeedbackConstants.LONG_PRESS
             : HapticFeedbackConstants.KEYBOARD_TAP);
@@ -306,7 +307,20 @@ public class ParkingFragment extends Fragment {
             return;
         }
         binding.parkingView.startBoardSteps(steps);
+        showComboIfAny(steps);
         viewModel.clearBoardEvent();
+    }
+
+    /** 一次操作送走 ≥2 辆车时弹出连击浮字并播报。 */
+    private void showComboIfAny(@Nullable List<BoardStep> steps) {
+        if (binding == null || steps == null || steps.size() < 2) {
+            return;
+        }
+        int cars = steps.size();
+        int bonus = ParkingConfig.SCORE_COMBO_PER_EXTRA * (cars - 1);
+        binding.parkingView.startComboPopup(cars, bonus);
+        soundManager.success();
+        announce(getString(R.string.parking_combo_announce, cars, bonus));
     }
 
     private void onMessage(@Nullable Integer messageRes) {

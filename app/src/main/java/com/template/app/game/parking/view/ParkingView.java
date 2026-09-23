@@ -219,6 +219,12 @@ public class ParkingView extends View implements ParkingTouchHandler.Host {
         invalidate();
     }
 
+    /** 播放连击浮字（一次操作送走 ≥2 辆车时）。 */
+    public void startComboPopup(int carCount, int bonus) {
+        anim.startCombo(carCount, bonus);
+        invalidate();
+    }
+
     /** 是否仍在播放任何动画（含接客离场编排）。用于锁住输入，避免动画途中状态错乱。 */
     public boolean isBusy() {
         return anim.isAnimating(SystemClock.uptimeMillis());

@@ -71,6 +71,16 @@ public final class ParkingConfig {
     /** 通关奖励 = 本值 × 关卡号。 */
     public static final int SCORE_PER_LEVEL_UNIT = 100;
 
+    /**
+     * 连击奖励：一次操作同时送走 ≥2 辆车时，每多送 1 辆额外加本值。
+     * <p>
+     * 例：一次送走 3 辆 → 奖励 {@code SCORE_COMBO_PER_EXTRA × 2}。
+     * 「一次操作」指一次 move / 移除 / 排序所触发的整轮接客结算
+     * （{@link com.template.app.game.parking.engine.ParkingEngine#resolvePickup}），
+     * 只有在该轮里真正开走的车才计入连击。
+     */
+    public static final int SCORE_COMBO_PER_EXTRA = 50;
+
     /** 关卡生成：布局重试上限。车多了、棋盘大了，重试成本高，但太多会让最坏耗时失控。 */
     public static final int GENERATOR_MAX_ATTEMPTS = 14;
 

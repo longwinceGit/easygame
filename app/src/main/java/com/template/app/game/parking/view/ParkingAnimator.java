@@ -83,6 +83,11 @@ class ParkingAnimator {
     int popupValue;
     long popupStart;
 
+    // ---- 连击浮字（一次操作送走 ≥2 辆车时弹出）----
+
+    String comboText;
+    long comboStart;
+
     // ---- 接客离场编排（乘客逐个上车 → 车一辆辆开走）----
 
     /**
@@ -418,6 +423,11 @@ class ParkingAnimator {
         popupStart = now();
     }
 
+    void startCombo(int carCount, int bonus) {
+        comboText = carCount + "连击 +" + bonus;
+        comboStart = now();
+    }
+
     void clearMove() {
         moveVehicleId = -1;
         moveVehicle = null;
@@ -443,9 +453,14 @@ class ParkingAnimator {
         return popupValue > 0 && now - popupStart < POPUP_DURATION_MS;
     }
 
+    boolean isComboAnimating(long now) {
+        return comboText != null && now - comboStart < POPUP_DURATION_MS;
+    }
+
     /** 只要还有任一动画在跑，就需要下一帧。 */
     boolean isAnimating(long now) {
-        return isMoveAnimating(now) || isExitAnimating(now) || isPopupAnimating(now) || hasBoardQueue();
+        return isMoveAnimating(now) || isExitAnimating(now)
+            || isPopupAnimating(now) || isComboAnimating(now) || hasBoardQueue();
     }
 
     private static long now() {
