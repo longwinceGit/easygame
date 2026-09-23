@@ -69,6 +69,21 @@ ui.parking ──► engine.parking ──► model.parking
 core.GameRegistry ──► parking.ParkingGamePlugin（唯一白名单）
 ```
 
+### 2.1 渲染反馈通道（浮字 / 连击）
+
+分数与连击的视觉反馈走一条**独立于游戏逻辑**的渲染通道，三层各司其职、互不直接依赖：
+
+- **引擎层**（`ParkingEngine.resolvePickup`）：在一次接客结算里累加分数、记录真正开走的车，
+  通过 `MoveResult.boardSteps` / `boardEvent` 把离场车清单交出去——**不引用任何 `android.*`，不碰 UI**。
+- **UI 层**（`ParkingFragment.showComboIfAny`）：拿到离场车清单后，若 `size ≥ 2` 即判定为连击，
+  算出奖励 `50 × (车数−1)`，调用 `ParkingView.startComboPopup(车数, 奖励)`。
+- **渲染层**（`ParkingAnimator` → `ParkingRenderer`）：`startCombo` 写入 `comboText` / `comboStart`，
+  `drawComboPopup` 在接客区上方更高处绘制「N连击 +奖励」浮字，并纳入 `isAnimating` 保证持续刷帧。
+
+连击浮字使用**独立字段** `comboText`，与每位乘客的「+分数」浮字（`popupValue`）分开存储与绘制，
+因此两者可同时出现、互不覆盖。该浮字通道与俄罗斯方块消行弹「+N」浮字同源，
+区别仅在停车连击多了一层「离场车计数 → 判定连击」的逻辑（详见 GDD 4.2 / 6.1）。
+
 ---
 
 ## 3. ADR-007：关卡生成放在后台线程，主线程只接收结果
