@@ -42,3 +42,4 @@ out/
 .codegraph/
 .codebuddy/
 .omo/
+verify_tmp/
