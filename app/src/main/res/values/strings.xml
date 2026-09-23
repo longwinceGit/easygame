@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="app_name">游戏合集</string>
+    <string name="app_name">简单游戏</string>
 
     <!-- 底部导航 -->
     <string name="nav_games">游戏</string>
