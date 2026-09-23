@@ -10,7 +10,6 @@ build/
 local.properties
 
 # Built application files
-*.apk
 *.ap_
 *.aab
 
