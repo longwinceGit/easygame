@@ -60,13 +60,13 @@
 
     <integer-array name="parking_passenger_colors">
         <item>0xFFEF5350</item> <!-- 0 红 -->
-        <item>0xFF64B5F6</item> <!-- 1 蓝 -->
+        <item>0xFF42A5F5</item> <!-- 1 蓝 (深一档，与青拉开) -->
         <item>0xFF66BB6A</item> <!-- 2 绿 -->
         <item>0xFFFFD54F</item> <!-- 3 黄 -->
         <item>0xFFCE93D8</item> <!-- 4 紫 -->
-        <item>0xFFF48FB1</item> <!-- 5 粉 -->
+        <item>0xFFF8BBD0</item> <!-- 5 粉 (更浅，与红靠明度拉开) -->
         <item>0xFFFFB74D</item> <!-- 6 橙 -->
-        <item>0xFF4DD0E1</item> <!-- 7 青 -->
+        <item>0xFF26C6DA</item> <!-- 7 青 (偏绿，与蓝拉开) -->
     </integer-array>
 
 </resources>

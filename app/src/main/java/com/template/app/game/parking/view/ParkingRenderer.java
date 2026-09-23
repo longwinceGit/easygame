@@ -30,7 +30,7 @@ import com.template.app.game.parking.model.Vehicle;
 class ParkingRenderer {
 
     /** 乘客队列最多画多少个头像，超出的用 "+N" 表示。关卡越深乘客越多，靠 "+N" 兜底。 */
-    private static final int MAX_PASSENGER_ICONS = 16;
+    private static final int MAX_PASSENGER_ICONS = 10;
 
     private final ParkingGeometry geometry;
     private final int[] passengerColors;
@@ -92,9 +92,9 @@ class ParkingRenderer {
         signCaptionPaint.setTextSize(8f * density);
         signCaptionPaint.setFakeBoldText(true);
 
-        overflowPaint.setColor(ContextCompat.getColor(context, R.color.game_parking_sign_text_dim));
+        overflowPaint.setColor(ContextCompat.getColor(context, R.color.game_parking_accent));
         overflowPaint.setTextAlign(Paint.Align.LEFT);
-        overflowPaint.setTextSize(12f * density);
+        overflowPaint.setTextSize(14f * density);
         overflowPaint.setFakeBoldText(true);
 
         slotPaint.setStyle(Paint.Style.FILL);

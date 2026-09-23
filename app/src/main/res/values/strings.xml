@@ -59,6 +59,10 @@
     <string name="parking_solved_message">接走 %1$d 位乘客 · 累计 %2$d 分 · 历史最高 %3$d 分</string>
     <string name="parking_next_level">下一关</string>
     <string name="parking_back_to_hub">返回大厅</string>
+    <string name="parking_continue_title">继续上次的游戏？</string>
+    <string name="parking_continue_message">上次玩到第 %1$d 关，得分 %2$d。要接着玩，还是从头开始？</string>
+    <string name="parking_continue_positive">继续</string>
+    <string name="parking_continue_negative">重新开始</string>
     <string name="parking_stuck_title">卡住了</string>
     <string name="parking_stuck_message">停车场里已经没有能动的车了</string>
     <string name="parking_stuck_undo">撤销一步</string>

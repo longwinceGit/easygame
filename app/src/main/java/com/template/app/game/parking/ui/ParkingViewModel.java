@@ -37,6 +37,13 @@ public class ParkingViewModel extends AndroidViewModel {
     private static final String PREF_HINT = "parking_hint";
     private static final String KEY_HINT_SHOWN = "hint_shown";
 
+    /** 未完成进度存档：支持「第二次进入弹出 继续 / 重新开始」。 */
+    private static final String PREF_SESSION = "parking_session";
+    private static final String KEY_SESSION_LEVEL = "session_level";
+    private static final String KEY_SESSION_SCORE = "session_score";
+    private static final String KEY_SESSION_SERVED = "session_served";
+    private static final String KEY_SESSION_ACTIVE = "session_active";
+
     private final ParkingEngine engine = new ParkingEngine();
     private final ParkingLevelGenerator generator = new ParkingLevelGenerator();
     private final GameRecordRepository repository;
@@ -183,7 +190,61 @@ public class ParkingViewModel extends AndroidViewModel {
     /** 开新一轮：分数清零，从第 1 关开始。 */
     public void startRun() {
         engine.startNewRun();
+        recordSaved = false;
+        persistProgress(1, 0, 0);
         requestLevel(1);
+    }
+
+    // ---- 继续 / 重新开始 ----
+
+    /** 是否存在可继续的未完成进度（已玩过且分数>0，或已推进到非第 1 关）。 */
+    public boolean hasResumableSession() {
+        return sessionPrefs().getBoolean(KEY_SESSION_ACTIVE, false);
+    }
+
+    /** 存档中的关卡号（用于「继续」对话框展示）。 */
+    public int getSavedLevel() {
+        return sessionPrefs().getInt(KEY_SESSION_LEVEL, 1);
+    }
+
+    /** 存档中的累计分（用于「继续」对话框展示）。 */
+    public int getSavedScore() {
+        return sessionPrefs().getInt(KEY_SESSION_SCORE, 0);
+    }
+
+    /** 继续上次的进度：分数接续，从第 session_level 关开始。 */
+    public void continueRun() {
+        int level = sessionPrefs().getInt(KEY_SESSION_LEVEL, 1);
+        int score = sessionPrefs().getInt(KEY_SESSION_SCORE, 0);
+        engine.beginRun(score);
+        requestLevel(level);
+    }
+
+    /** 放弃当前进度并重新开始：先把本局成绩记一次，再回到第 1 关。 */
+    public void abandonAndRestart() {
+        int level = sessionPrefs().getInt(KEY_SESSION_LEVEL, 1);
+        int score = sessionPrefs().getInt(KEY_SESSION_SCORE, 0);
+        int served = sessionPrefs().getInt(KEY_SESSION_SERVED, 0);
+        saveRecord(score, served, level);
+        startRun();
+    }
+
+    private SharedPreferences sessionPrefs() {
+        return getApplication().getSharedPreferences(PREF_SESSION, android.content.Context.MODE_PRIVATE);
+    }
+
+    /**
+     * 把当前进度写入存档。{@code active} 由「是否已玩过」推导：
+     * 仅第 1 关且 0 分视为「无进度」，不提供继续。
+     */
+    private void persistProgress(int level, int score, int served) {
+        boolean active = level > 1 || score > 0;
+        sessionPrefs().edit()
+            .putInt(KEY_SESSION_LEVEL, level)
+            .putInt(KEY_SESSION_SCORE, score)
+            .putInt(KEY_SESSION_SERVED, served)
+            .putBoolean(KEY_SESSION_ACTIVE, active)
+            .apply();
     }
 
     /**
@@ -242,6 +303,9 @@ public class ParkingViewModel extends AndroidViewModel {
         loading.setValue(false);
         recordSaved = false;
         publish();
+        // 进度持久化：把当前关卡 / 累计分 / 累计接客数写入存档，
+        // 退到大厅只是「暂停」，下次进入可「继续」。
+        persistProgress(engine.getLevelIndex(), engine.getScore(), engine.getSessionServed());
     }
 
     /** 进入下一关。 */
@@ -354,9 +418,13 @@ public class ParkingViewModel extends AndroidViewModel {
 
     private void publishFinish() {
         if (engine.getState() == ParkingEngine.State.SOLVED) {
-            saveRecord();
+            // 过关不记战绩：一局=一次游玩，分数整局累加，只有「本局结束」才记一次分。
+            // 把进度推进到下一关，下次「继续」从下一关开始。
+            persistProgress(engine.getLevelIndex() + 1, engine.getScore(), engine.getSessionServed());
             finishEvent.setValue(Boolean.TRUE);
         } else if (engine.getState() == ParkingEngine.State.STUCK) {
+            // 卡死=本局结束：记一次分，并清除可继续进度。
+            saveRecord();
             finishEvent.setValue(Boolean.FALSE);
         }
     }
@@ -377,20 +445,27 @@ public class ParkingViewModel extends AndroidViewModel {
         sortsLeft.setValue(engine.getSortsLeft());
         canUndo.setValue(engine.canUndo());
         state.setValue(engine.getState());
+        persistProgress(engine.getLevelIndex(), engine.getScore(), engine.getSessionServed());
         Integer current = revision.getValue();
         revision.setValue(current == null ? 1 : current + 1);
     }
 
     private void saveRecord() {
+        saveRecord(engine.getScore(), engine.getSessionServed(), engine.getLevelIndex());
+    }
+
+    /** 把一局成绩写入战绩（一次游玩只调一次）。写入后清除可继续进度。 */
+    private void saveRecord(int score, int served, int level) {
         if (recordSaved) {
             return;
         }
         recordSaved = true;
         repository.save(new GameRecord(
             Constants.GAME_ID_PARKING,
-            engine.getScore(),
-            engine.getPassengersServed(),
-            engine.getLevelIndex(),
+            score,
+            served,
+            level,
             System.currentTimeMillis()));
+        persistProgress(1, 0, 0);
     }
 }

@@ -18,6 +18,7 @@ import com.google.android.material.dialog.MaterialAlertDialogBuilder;
 import com.google.android.material.snackbar.Snackbar;
 import com.template.app.R;
 import com.template.app.databinding.FragmentParkingBinding;
+import com.template.app.util.SoundManager;
 import com.template.app.game.parking.engine.MoveResult;
 import com.template.app.game.parking.engine.ParkingConfig;
 import com.template.app.game.parking.engine.ParkingEngine;
@@ -38,6 +39,7 @@ public class ParkingFragment extends Fragment {
 
     private FragmentParkingBinding binding;
     private ParkingViewModel viewModel;
+    private SoundManager soundManager;
     private String[] colorNames;
 
     /**
@@ -63,6 +65,7 @@ public class ParkingFragment extends Fragment {
         super.onViewCreated(view, savedInstanceState);
         viewModel = new ViewModelProvider(this).get(ParkingViewModel.class);
         colorNames = getResources().getStringArray(R.array.parking_color_names);
+        soundManager = SoundManager.getInstance(requireContext());
 
         binding.parkingView.attach(viewModel.getEngine());
         binding.parkingView.setListener(new ParkingView.Listener() {
@@ -82,20 +85,28 @@ public class ParkingFragment extends Fragment {
             }
         });
 
-        binding.btnBack.setOnClickListener(v -> navigateUp());
+        binding.btnBack.setOnClickListener(v -> {
+            soundManager.click();
+            navigateUp();
+        });
         binding.btnSort.setOnClickListener(v -> {
             if (binding.parkingView.isBusy()) {
                 return;
             }
+            soundManager.click();
             viewModel.sortQueue();
         });
         binding.btnRefresh.setOnClickListener(v -> {
             if (binding.parkingView.isBusy()) {
                 return;
             }
+            soundManager.click();
             viewModel.refreshLevel();
         });
-        binding.btnRemove.setOnClickListener(v -> viewModel.toggleRemoveMode());
+        binding.btnRemove.setOnClickListener(v -> {
+            soundManager.click();
+            viewModel.toggleRemoveMode();
+        });
 
         renderHint();
 
@@ -137,8 +148,27 @@ public class ParkingFragment extends Fragment {
         }
         ParkingEngine.State state = viewModel.getState().getValue();
         if (state == null || state == ParkingEngine.State.READY) {
-            viewModel.startRun();
+            if (viewModel.hasResumableSession()) {
+                showContinueDialog();
+            } else {
+                viewModel.startRun();
+            }
         }
+    }
+
+    /** 第二次进入时弹出：继续（从存档关卡接续）或重新开始（从第 1 关）。 */
+    private void showContinueDialog() {
+        int level = viewModel.getSavedLevel();
+        int score = viewModel.getSavedScore();
+        new MaterialAlertDialogBuilder(requireContext())
+            .setTitle(R.string.parking_continue_title)
+            .setMessage(getString(R.string.parking_continue_message, level, score))
+            .setCancelable(false)
+            .setPositiveButton(R.string.parking_continue_positive,
+                (dialog, which) -> viewModel.continueRun())
+            .setNegativeButton(R.string.parking_continue_negative,
+                (dialog, which) -> viewModel.abandonAndRestart())
+            .show();
     }
 
     @Override
@@ -254,6 +284,7 @@ public class ParkingFragment extends Fragment {
             binding.parkingView.startPopup(result.boarded * ParkingConfig.SCORE_PER_PASSENGER);
             pulse(binding.tvScore);
             announce(getString(R.string.parking_announce_boarded, result.boarded));
+            soundManager.success();
         } else if (result.exited) {
             announce(getString(R.string.parking_announce_parked,
                 viewModel.getEngine().getFreeSlots()));

@@ -59,6 +59,8 @@ public final class ParkingEngine {
     private int totalPassengers;
     private int passengersServed;
     private int score;
+    /** 本局累计接走的乘客数（跨关累加，用于「一次游玩记一次分」的战绩）。 */
+    private int sessionServedTotal;
     private int removesLeft;
     private int sortsLeft;
 
@@ -96,6 +98,7 @@ public final class ParkingEngine {
     /** 开新一轮：分数清零、回到第 1 关。 */
     public void startNewRun() {
         score = 0;
+        sessionServedTotal = 0;
         levelIndex = 1;
         state = State.READY;
         vehicles.clear();
@@ -118,6 +121,28 @@ public final class ParkingEngine {
 
     public int getScore() {
         return score;
+    }
+
+    /** 本局累计接走的乘客数（跨关累加）。 */
+    public int getSessionServed() {
+        return sessionServedTotal;
+    }
+
+    /**
+     * 从指定累计分接续开一局（「继续」用）。
+     * <p>
+     * 不重置分数与累计接客数，关卡号由随后套用的关卡决定；状态回到 {@code READY}
+     * 等待 {@code applyLevel} 装载第 {@code sessionLevel} 关。
+     */
+    public void beginRun(int startScore) {
+        score = startScore;
+        sessionServedTotal = 0;
+        levelIndex = 1;
+        state = State.READY;
+        vehicles.clear();
+        queue.clear();
+        undoStack.clear();
+        rebuildGrid();
     }
 
     /** 本关还没被接走的乘客数。 */
@@ -498,6 +523,7 @@ public final class ParkingEngine {
             front.count -= take;
             match.loaded += take;
             passengersServed += take;
+            sessionServedTotal += take;
             score += take * ParkingConfig.SCORE_PER_PASSENGER;
             if (front.count == 0) {
                 queue.remove(0);

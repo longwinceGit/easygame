@@ -75,14 +75,14 @@
     <!-- 箭头用 白填充 + 深描边 双绘保证可辨识                              -->
     <!-- ================================================================ -->
     <integer-array name="parking_passenger_colors">
-        <item>0xFFE53935</item> <!-- 0 红 -->
-        <item>0xFF1E88E5</item> <!-- 1 蓝 -->
-        <item>0xFF43A047</item> <!-- 2 绿 -->
-        <item>0xFFFBC02D</item> <!-- 3 黄 -->
-        <item>0xFF8E24AA</item> <!-- 4 紫 -->
-        <item>0xFFEC407A</item> <!-- 5 粉 -->
-        <item>0xFFFB8C00</item> <!-- 6 橙 -->
-        <item>0xFF00ACC1</item> <!-- 7 青 -->
+        <item>0xFFE53935</item> <!-- 0 红 (纯红) -->
+        <item>0xFF1565C0</item> <!-- 1 蓝 (深蓝，与青拉开) -->
+        <item>0xFF2E7D32</item> <!-- 2 绿 (深绿) -->
+        <item>0xFFFDD835</item> <!-- 3 黄 (亮黄，与橙拉开) -->
+        <item>0xFF7B1FA2</item> <!-- 4 紫 (深紫) -->
+        <item>0xFFFF80AB</item> <!-- 5 粉 (浅粉，靠明度与正红拉开) -->
+        <item>0xFFEF6C00</item> <!-- 6 橙 (深橙，与黄拉开) -->
+        <item>0xFF00BFA5</item> <!-- 7 青 (青绿，与蓝拉开) -->
     </integer-array>
 
 </resources>
