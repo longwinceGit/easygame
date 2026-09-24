@@ -33,7 +33,14 @@ class ParkingGeometry {
     static final float LOT_SCALE = 0.95f;
 
     static final float QUEUE_HEIGHT_DP = 46f;
-    static final float PICKUP_HEIGHT_DP = 62f;
+
+    /**
+     * 接客区高度。区内的车高 = 本值 × 0.5（见 {@code ParkingRenderer#drawPickup}），
+     * 座位数角标按车尺寸自适应缩放，因此调本值不会挤爆车内的数字。
+     * 嫌接客区占地方时优先调它——{@code minSceneHeightPx()} 会自动跟着变，无需另改。
+     */
+    static final float PICKUP_HEIGHT_DP = 52f;
+
     static final float ROAD_HEIGHT_DP = 44f;
     static final float GAP_DP = 10f;
     static final float SLOT_GAP_DP = 6f;

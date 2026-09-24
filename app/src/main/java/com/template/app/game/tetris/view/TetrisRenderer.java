@@ -33,6 +33,11 @@ class TetrisRenderer {
     private static final float COLUMN_ALPHA = 0.35f;
     private static final float FLASH_ALPHA = 0.90f;
     private static final float DRAG_ALPHA = 0.95f;
+    /**
+     * 需要描边补偿的浅色块下标 = 1（O 块）。
+     * 该位置现在取挪车色板的「黄」（原为琥珀，同属浅色），与浅色棋盘底对比度不足 3:1，
+     * 仍需描边补偿；若色板顺序调整，此处要跟着改。
+     */
     private static final int AMBER_INDEX = 1;
 
     private final Paint paintBoardBg = new Paint(Paint.ANTI_ALIAS_FLAG);
@@ -242,7 +247,7 @@ class TetrisRenderer {
         paintInner.setAlpha((int) (255 * alpha * INNER_ALPHA));
         canvas.drawRoundRect(rect, radius * 0.6f, radius * 0.6f, paintInner);
 
-        // 琥珀块与浅色棋盘底对比度不足 3:1，用描边补偿（UI 规格 2.1）
+        // 浅色块（O 黄）与浅色棋盘底对比度不足 3:1，用描边补偿（UI 规格 2.1）
         if (paletteIndex == AMBER_INDEX) {
             rect.set(x + inset, y + inset, x + size - inset, y + size - inset);
             paintAmberStroke.setStrokeWidth(size * AMBER_STROKE_RATIO);

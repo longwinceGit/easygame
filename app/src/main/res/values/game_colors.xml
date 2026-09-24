@@ -59,14 +59,20 @@
     <!-- ================================================================ -->
     <!-- 方块调色板：下标 = TetrominoType.ordinal()                        -->
     <!-- ================================================================ -->
+    <!--
+      方块色板与挪车消消消的车辆色板取同一套色值（见 parking_passenger_colors），
+      让两个游戏视觉统一。按色相一一对应：I 青 / O 黄 / T 紫 / S 绿 / Z 红 / J 蓝 / L 橙。
+      刻意不直接引用挪车的资源数组：游戏插件须自包含（ADR），跨游戏引用资源会破坏这条约束；
+      代价是两处色值需手动同步，改动任一边请同步另一边与 values-night。
+    -->
     <integer-array name="tetris_piece_colors">
-        <item>0xFF00A3C4</item> <!-- I 青 -->
-        <item>0xFFF2B705</item> <!-- O 琥珀 -->
-        <item>0xFF8E4EC6</item> <!-- T 紫 -->
-        <item>0xFF3BA55D</item> <!-- S 绿 -->
-        <item>0xFFE5484D</item> <!-- Z 红 -->
-        <item>0xFF2D7FF9</item> <!-- J 蓝 -->
-        <item>0xFFF76808</item> <!-- L 橙 -->
+        <item>0xFF00BFA5</item> <!-- I 青 ← 挪车色板 7 -->
+        <item>0xFFFDD835</item> <!-- O 黄 ← 挪车色板 3 -->
+        <item>0xFF7B1FA2</item> <!-- T 紫 ← 挪车色板 4 -->
+        <item>0xFF2E7D32</item> <!-- S 绿 ← 挪车色板 2 -->
+        <item>0xFFE53935</item> <!-- Z 红 ← 挪车色板 0 -->
+        <item>0xFF1565C0</item> <!-- J 蓝 ← 挪车色板 1 -->
+        <item>0xFFEF6C00</item> <!-- L 橙 ← 挪车色板 6 -->
     </integer-array>
 
     <!-- ================================================================ -->

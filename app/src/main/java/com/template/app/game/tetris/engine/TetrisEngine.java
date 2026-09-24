@@ -148,10 +148,10 @@ public final class TetrisEngine {
         }
         score += gained;
 
-        // 顺序不可颠倒：先补充，再判定是否无处可放（GDD 机制 3 / 5）
-        if (isTrayEmpty()) {
-            refillTray();
-        }
+        // 放一块即补一块：空出的槽位立刻生成新方块，玩家无需等三块都用完。
+        // refillTray() 本身就是"只填 null 槽"，故这里无条件调用即可。
+        // 顺序不可颠倒：先补充，再判定是否无处可放（GDD 机制 5）。
+        refillTray();
         boolean gameOver = !hasAnyMove();
         if (gameOver) {
             state = State.GAME_OVER;
@@ -266,15 +266,6 @@ public final class TetrisEngine {
 
     private boolean isValidSlot(int slot) {
         return slot >= 0 && slot < tray.length;
-    }
-
-    private boolean isTrayEmpty() {
-        for (Tetromino piece : tray) {
-            if (piece != null) {
-                return false;
-            }
-        }
-        return true;
     }
 
     private void refillTray() {

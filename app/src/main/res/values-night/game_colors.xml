@@ -48,14 +48,16 @@
     <color name="parking_prop_stroke">#E0A800</color>
     <color name="parking_prop_text">#4E342E</color>
 
+    <!-- 与挪车消消消车辆色板取同一套色值（见同目录 parking_passenger_colors），
+         对应关系与 values/game_colors.xml 一致：I 青 / O 黄 / T 紫 / S 绿 / Z 红 / J 蓝 / L 橙。 -->
     <integer-array name="tetris_piece_colors">
-        <item>0xFF4DD0E1</item> <!-- I -->
-        <item>0xFFFFD54F</item> <!-- O -->
-        <item>0xFFCE93D8</item> <!-- T -->
-        <item>0xFF66BB6A</item> <!-- S -->
-        <item>0xFFEF5350</item> <!-- Z -->
-        <item>0xFF64B5F6</item> <!-- J -->
-        <item>0xFFFFA726</item> <!-- L -->
+        <item>0xFF26C6DA</item> <!-- I 青 ← 挪车色板 7 -->
+        <item>0xFFFFD54F</item> <!-- O 黄 ← 挪车色板 3 -->
+        <item>0xFFCE93D8</item> <!-- T 紫 ← 挪车色板 4 -->
+        <item>0xFF66BB6A</item> <!-- S 绿 ← 挪车色板 2 -->
+        <item>0xFFEF5350</item> <!-- Z 红 ← 挪车色板 0 -->
+        <item>0xFF42A5F5</item> <!-- J 蓝 ← 挪车色板 1（深一档，与青拉开） -->
+        <item>0xFFFFB74D</item> <!-- L 橙 ← 挪车色板 6 -->
     </integer-array>
 
     <integer-array name="parking_passenger_colors">

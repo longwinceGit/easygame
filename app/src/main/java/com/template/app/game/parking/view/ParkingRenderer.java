@@ -710,9 +710,20 @@ class ParkingRenderer {
         }
     }
 
-    /** 车顶高光往车头方向偏移：+1 = 朝正方向，-1 = 朝负方向。 */
+    /**
+     * 车身朝向符号：决定车顶高光与前挡风（即"车头"）画在车身的哪一端。
+     * <p>
+     * 必须与行驶方向 {@code Direction#dRow/dCol}、方向箭头
+     * {@code Direction#arrowDegrees()} <b>三者一致</b>，否则玩家会看到
+     * "车头朝着行驶方向的反面"。
+     * <p>
+     * <b>这里刻意对方向符号取反</b>：车身块的排布约定里，前挡风总是落在
+     * 高光的<b>反侧</b>（见 {@code bandStart} 的两个分支），而挡风才是玩家判断
+     * 车头的依据。因此直接取 {@code dRow + dCol} 的符号会让挡风落到车尾，
+     * 表现为整辆车朝反方向；取反后挡风才落在车头那端。
+     */
     private static float forwardSign(Direction direction) {
-        return (direction.dRow + direction.dCol) >= 0 ? 1f : -1f;
+        return (direction.dRow + direction.dCol) >= 0 ? -1f : 1f;
     }
 
     /**

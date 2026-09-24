@@ -14,13 +14,20 @@ public final class TetrisConfig {
         // 常量类禁止实例化
     }
 
-    /** 棋盘列数 */
-    public static final int BOARD_WIDTH = 10;
+    /**
+     * 棋盘列数。
+     * <p>
+     * 格子尺寸是<b>自适应</b>的：{@code TetrisGeometry.layout} 取
+     * {@code min(可用宽 / 列数, 可用高 / (行数 + 托盘跨度))}，
+     * 因此加宽棋盘不会让格子溢出——常见屏幕上约束来自高度，
+     * 加宽后格子大小不变、棋盘更宽（两侧留白更少）。
+     */
+    public static final int BOARD_WIDTH = 12;
 
     /** 棋盘行数 */
     public static final int BOARD_HEIGHT = 20;
 
-    /** 托盘槽位数（全部用完才补充，见 GDD 机制 3） */
+    /** 托盘槽位数（放置一块即补齐该槽，见 GDD 机制 3） */
     public static final int TRAY_SIZE = 3;
 
     /**
