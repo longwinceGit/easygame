@@ -250,13 +250,16 @@ public class ParkingFragment extends Fragment {
             return;
         }
         boolean busy = Boolean.TRUE.equals(viewModel.getLoading().getValue());
-        boolean running = viewModel.getState().getValue() == ParkingEngine.State.RUNNING;
+        ParkingEngine.State state = viewModel.getState().getValue();
+        boolean running = state == ParkingEngine.State.RUNNING;
+        // 死局时也允许用「移除」清路：关卡不再保证无道具可解，这是唯一的自救手段。
+        boolean stuck = state == ParkingEngine.State.STUCK;
         Integer removes = viewModel.getRemovesLeft().getValue();
         Integer sorts = viewModel.getSortsLeft().getValue();
 
         binding.btnSort.setEnabled(running && !busy && sorts != null && sorts > 0);
         binding.btnRefresh.setEnabled(!busy);
-        binding.btnRemove.setEnabled(running && !busy && removes != null && removes > 0);
+        binding.btnRemove.setEnabled((running || stuck) && !busy && removes != null && removes > 0);
         binding.btnRemove.setChecked(Boolean.TRUE.equals(viewModel.getRemoveMode().getValue()));
     }
 
@@ -381,17 +384,34 @@ public class ParkingFragment extends Fragment {
     }
 
     private void showStuckDialog() {
-        String message = getString(R.string.parking_stuck_message);
+        Integer removes = viewModel.getRemovesLeft().getValue();
+        boolean canRemove = removes != null && removes > 0;
+        String message = getString(canRemove
+            ? R.string.parking_stuck_message_removable
+            : R.string.parking_stuck_message);
         announce(message);
-        new MaterialAlertDialogBuilder(requireContext())
+        MaterialAlertDialogBuilder builder = new MaterialAlertDialogBuilder(requireContext())
             .setTitle(R.string.parking_stuck_title)
             .setMessage(message)
-            .setCancelable(false)
-            .setPositiveButton(R.string.parking_stuck_undo, (dialog, which) -> viewModel.undo())
-            .setNegativeButton(R.string.parking_stuck_refresh,
-                (dialog, which) -> viewModel.refreshLevel())
-            .setNeutralButton(R.string.parking_back_to_hub, (dialog, which) -> navigateUp())
-            .show();
+            .setCancelable(false);
+        if (canRemove) {
+            // 还有「移除」次数：引导玩家清路自救，而不是直接结束本局。
+            // 关卡不再保证无道具可解，"被堵死"是预期内局面，移除就是它的解压阀。
+            builder.setPositiveButton(R.string.parking_stuck_remove,
+                    (dialog, which) -> viewModel.toggleRemoveMode())
+                .setNegativeButton(R.string.parking_stuck_undo,
+                    (dialog, which) -> viewModel.undo())
+                .setNeutralButton(R.string.parking_back_to_hub,
+                    (dialog, which) -> navigateUp());
+        } else {
+            builder.setPositiveButton(R.string.parking_stuck_undo,
+                    (dialog, which) -> viewModel.undo())
+                .setNegativeButton(R.string.parking_stuck_refresh,
+                    (dialog, which) -> viewModel.refreshLevel())
+                .setNeutralButton(R.string.parking_back_to_hub,
+                    (dialog, which) -> navigateUp());
+        }
+        builder.show();
     }
 
     /** 数值变化的脉冲反馈，让分数变化被看见。 */

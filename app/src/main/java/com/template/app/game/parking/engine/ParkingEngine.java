@@ -379,11 +379,15 @@ public final class ParkingEngine {
      * <p>
      * 被移除的车的乘客会一并改乘其他交通工具离开（同步扣减本关总人数），
      * 否则会留下永远等不到车的乘客——那是一个必然的软锁。
+     * <p>
+     * <b>关卡不再在生成时证明全局可解</b>（只做开局弱校验），因此"车被堵死"是预期内的
+     * 局面，本道具就是它的解压阀——故{@code STUCK} 状态下<b>仍然允许使用</b>：
+     * 清掉挡路车后局面往往重新可动，此时应回到 {@code RUNNING} 继续玩，而不是直接判负。
      *
      * @return 是否成功
      */
     public boolean removeVehicle(int vehicleId) {
-        if (state != State.RUNNING || removesLeft <= 0) {
+        if ((state != State.RUNNING && state != State.STUCK) || removesLeft <= 0) {
             return false;
         }
         Vehicle v = vehicleById(vehicleId);
@@ -396,6 +400,9 @@ public final class ParkingEngine {
         rebuildGrid();
         dropPassengers(v.colorIndex, v.capacity());
         lastBoardSteps = resolvePickup(null);
+        // 死局自救：先回到 RUNNING，再由 finishTurn 统一判定
+        // （仍无可动车 → 再次 STUCK；乘客接完 → SOLVED）。
+        state = State.RUNNING;
         finishTurn();
         return true;
     }

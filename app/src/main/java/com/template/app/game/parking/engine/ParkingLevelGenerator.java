@@ -6,28 +6,30 @@ import com.template.app.game.parking.model.PassengerGroup;
 import com.template.app.game.parking.model.Vehicle;
 
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 import java.util.Random;
 
 /**
- * 关卡生成器：<b>随机布局 + BFS 求解</b>（ADR-008）。
+ * 关卡生成器：<b>随机布局 + 弱校验</b>。
  * <p>
- * 关键点在于顺序不是"验"出来的，而是"求"出来的：
+ * <b>已不再于生成时证明整关可解</b>（原 ADR-008 的"随机布局 + BFS 求解"）：
+ * 密度要推到参考图那种"满场堵成一团"（{@code MAX_FILL_RATIO} 0.90、约 36 辆），
+ * 全局 BFS 在这个密度下展不开，会退化成大量降车、永远达不到目标车辆数。
+ * <p>
+ * 现在的做法：
  * <ol>
  *   <li>随机丢车进停车场（只保证不重叠），每辆车随机颜色与四向箭头之一</li>
- *   <li>逐辆 BFS 搜索"把这辆车沿箭头开出边界"的最短路，求出一辆就把它移出状态</li>
- *   <li><b>求出的顺序本身就是乘客队列的顺序</b>——于是关卡在生成时就被证明可解</li>
+ *   <li><b>弱校验</b>：只要求开局有 ≥ {@link ParkingConfig#MIN_ESCAPABLE_AT_START}
+ *       辆车能沿箭头直线开走——保证"开局有得走"</li>
+ *   <li>队列顺序不再等于解法顺序：先排开局能开走的车，其余随机追加</li>
  * </ol>
- * <b>保守性</b>：BFS 中<b>非目标</b>车辆最多只能开到离边界一格的位置，不得到达边界
- * ——因为在真实引擎里"到达边界"等价于<b>驶出停车场</b>，会消耗接客位。
- * 而"停在离边界一格"在真实游戏中由拖动实现，因此 BFS 的可达状态是真实游戏的子集
- * ——BFS 能解，真实游戏一定能解。
+ * 后续被堵死的车由「移除 / 排序」道具兜底（见
+ * {@link ParkingConfig#REMOVE_PER_LEVEL}），这是本作"高密度"的解压阀。
  * <p>
- * 纯 Java：这是一个纯函数式的算法资产，可以在 JVM 上直接断言"生成 N 关，全部可解"。
+ * 纯 Java：可以在 JVM 上直接断言"生成 N 关，开局均可动"。
  */
 public final class ParkingLevelGenerator {
-
-    private static final int PLACEMENT_ATTEMPTS = 160;
 
     private final Random random;
 
@@ -47,9 +49,8 @@ public final class ParkingLevelGenerator {
     /**
      * 生成一个关卡。
      * <p>
-     * <b>必须在后台线程调用</b>（ADR-007）：最坏情况是数十万次状态展开。
-     * 求解器本身受 {@link ParkingConfig#GENERATOR_MAX_BFS_STATES} 状态数约束，
-     * 不再叠加墙钟预算，使测试机与真机的生成行为完全一致。
+     * <b>必须在后台线程调用</b>（ADR-007）：高密度下放车与弱校验仍有可观开销，
+     * 但相比原 BFS 方案（数十万次状态展开）已快若干个数量级。
      */
     public Level generate(int levelIndex) {
         int count = ParkingConfig.vehicleCount(levelIndex);
@@ -60,7 +61,7 @@ public final class ParkingLevelGenerator {
                 return level;
             }
         }
-        // 降级：减车。所有车都要接客离场，车越少越容易解。
+        // 降级：减车。车越少越容易满足弱校验。
         while (count > 2) {
             count--;
             for (int attempt = 0; attempt < 8; attempt++) {
@@ -70,7 +71,7 @@ public final class ParkingLevelGenerator {
                 }
             }
         }
-        // 保底：2 辆车，必然可解。玩家永远有得玩。
+        // 保底：2 辆车，必然可动。玩家永远有得玩。
         return emergencyLevel(levelIndex);
     }
 
@@ -83,22 +84,20 @@ public final class ParkingLevelGenerator {
         if (layout == null) {
             return null;
         }
-        Solution solution = solve(layout, vehicleCount);
-        // 质量门：拒绝"每辆车都能直接开走"的布局——那种局面点 N 下就通关，太简单。
-        // 门槛按<b>实际车数</b>算：降车重试时门槛同步下降，否则车少了却仍要求同样的
-        // 绝对步数，会让所有降车尝试都失败、直接掉进 2 车保底关。
-        if (solution == null
-            || solution.totalMoves < ParkingConfig.minSolutionMovesFor(vehicleCount, levelIndex)) {
+        // 弱校验：开局至少要有若干辆车能直接开走，否则整关一上来就堵死。
+        List<Integer> escapable = escapableVehicles(layout);
+        if (escapable.size() < ParkingConfig.MIN_ESCAPABLE_AT_START) {
             return null;
         }
-        return new Level(levelIndex, layout, buildQueue(layout, solution.order));
+        return new Level(levelIndex, layout, buildQueue(layout, escapable));
     }
 
     private List<Vehicle> randomLayout(int vehicleCount) {
         boolean[][] occupied = new boolean[ParkingConfig.ROWS][ParkingConfig.COLUMNS];
         List<Vehicle> layout = new ArrayList<>();
         for (int i = 0; i < vehicleCount; i++) {
-            Vehicle v = placeVehicle(occupied, i);
+            // 传入已放置的车辆：新车方向必须避开与同轴既有车"相向"（见 placeVehicle）
+            Vehicle v = placeVehicle(occupied, layout, i);
             if (v == null) {
                 return null;
             }
@@ -107,36 +106,115 @@ public final class ParkingLevelGenerator {
         return layout;
     }
 
-    /** 随机放一辆车：随机轴向、随机四向箭头、随机颜色、随机长度 2 或 3。 */
-    private Vehicle placeVehicle(boolean[][] occupied, int id) {
-        for (int attempt = 0; attempt < PLACEMENT_ATTEMPTS; attempt++) {
-            boolean horizontal = random.nextBoolean();
-            // 车长必须取自 ParkingConfig：容量推导用的 AVG_CELLS_PER_VEHICLE 依赖同一组常量
-            int length = ParkingConfig.LENGTH_MIN
-                + random.nextInt(ParkingConfig.LENGTH_MAX - ParkingConfig.LENGTH_MIN + 1);
-            int row;
-            int col;
-            if (horizontal) {
-                row = random.nextInt(ParkingConfig.ROWS);
-                col = random.nextInt(ParkingConfig.COLUMNS - length + 1);
-            } else {
-                row = random.nextInt(ParkingConfig.ROWS - length + 1);
-                col = random.nextInt(ParkingConfig.COLUMNS);
+    /**
+     * 随机放一辆车：随机轴向、随机颜色、随机长度 2 或 3；<b>方向受"禁止相向"约束</b>。
+     * <p>
+     * <b>方向约束（必须遵守，否则必然死局）</b>：同轴车辆不得"相向"。
+     * <ul>
+     *   <li>横向车：位于同行某辆横向车<b>左侧</b>时不得向右，位于其<b>右侧</b>时不得向左；</li>
+     *   <li>竖直车：位于同列某辆竖直车<b>上方</b>时不得向下，位于其<b>下方</b>时不得向上。</li>
+     * </ul>
+     * 原因：横向车只能沿行移动。"左车向右、右车向左"时两者互相挡在对方出口路径上，
+     * 且都无法让开（同一行没有第三条路可绕），于是<b>谁也开不走</b>——除「移除」道具外无解。
+     * 反之"左车向左、右车向右"（<b>背向</b>）合法：各自朝两端开走，互不阻挡。
+     * 等价表述：同行横向车按列排序后方向序列必须是"左* 右*"（先左后右）。
+     * <p>
+     * 实现上<b>不锁定整行方向</b>（那会把背向也一并禁掉、方向多样性损失一半），
+     * 而是对每个候选位置判定两个方向各自是否合法，只从合法方向里随机选。
+     * <p>
+     * <b>先收集全部可放位置再随机取一个</b>，而不是"随机试错 N 次"：
+     * 目标密度 0.90 时剩余空位稀少且破碎，随机试错会在放最后几辆车时频繁失败，
+     * 使整关反复重来；枚举候选（每辆约 200 个位置，开销可忽略）则只要还有空间必定成功。
+     */
+    private Vehicle placeVehicle(boolean[][] occupied, List<Vehicle> placed, int id) {
+        List<int[]> candidates = new ArrayList<>();
+        for (int length = ParkingConfig.LENGTH_MIN; length <= ParkingConfig.LENGTH_MAX; length++) {
+            for (int axis = 0; axis < 2; axis++) {
+                boolean horizontal = axis == 0;
+                int maxRow = horizontal ? ParkingConfig.ROWS : ParkingConfig.ROWS - length + 1;
+                int maxCol = horizontal ? ParkingConfig.COLUMNS - length + 1 : ParkingConfig.COLUMNS;
+                for (int row = 0; row < maxRow; row++) {
+                    for (int col = 0; col < maxCol; col++) {
+                        if (!isFree(occupied, row, col, length, horizontal)) {
+                            continue;
+                        }
+                        int dirs = allowedDirections(placed, row, col, horizontal);
+                        if (dirs == 0) {
+                            continue;   // 两个方向都会与既有车相向，此位置不可用
+                        }
+                        // {row, col, length, horizontal, dirs}
+                        candidates.add(new int[]{row, col, length, horizontal ? 1 : 0, dirs});
+                    }
+                }
             }
-            if (!isFree(occupied, row, col, length, horizontal)) {
+        }
+        if (candidates.isEmpty()) {
+            return null;
+        }
+        int[] pick = candidates.get(random.nextInt(candidates.size()));
+        int row = pick[0];
+        int col = pick[1];
+        int length = pick[2];
+        boolean horizontal = pick[3] == 1;
+        occupy(occupied, row, col, length, horizontal);
+
+        // 只从合法方向里随机选一个
+        int dirs = pick[4];
+        boolean positive = dirs == (DIR_POSITIVE | DIR_NEGATIVE)
+            ? random.nextBoolean()
+            : dirs == DIR_POSITIVE;
+        Direction direction;
+        if (horizontal) {
+            direction = positive ? Direction.RIGHT : Direction.LEFT;
+        } else {
+            direction = positive ? Direction.DOWN : Direction.UP;
+        }
+        int color = random.nextInt(ParkingConfig.COLOR_COUNT);
+        return new Vehicle(id, length, horizontal, direction, color, row, col);
+    }
+
+    /** 方向位掩码：正向 = 横向 RIGHT / 竖直 DOWN；负向 = 横向 LEFT / 竖直 UP。 */
+    private static final int DIR_POSITIVE = 1;
+    private static final int DIR_NEGATIVE = 2;
+
+    /**
+     * 该位置允许哪些方向（位掩码）：排除会与同轴既有车<b>相向</b>的方向。
+     * <p>
+     * 注意只禁"相向"——同向（跟在后面依次开走）与背向（各朝一端）都是可解的。
+     */
+    private static int allowedDirections(List<Vehicle> placed, int row, int col, boolean horizontal) {
+        int allowed = DIR_POSITIVE | DIR_NEGATIVE;
+        for (Vehicle other : placed) {
+            if (other.horizontal != horizontal) {
                 continue;
             }
-            occupy(occupied, row, col, length, horizontal);
-            Direction direction;
             if (horizontal) {
-                direction = random.nextBoolean() ? Direction.LEFT : Direction.RIGHT;
+                if (other.row != row) {
+                    continue;
+                }
+                // 我在它左侧却要向右 → 与这辆向左的车相向
+                if (col < other.col && other.direction == Direction.LEFT) {
+                    allowed &= ~DIR_POSITIVE;
+                }
+                // 我在它右侧却要向左 → 与这辆向右的车相向
+                if (col > other.col && other.direction == Direction.RIGHT) {
+                    allowed &= ~DIR_NEGATIVE;
+                }
             } else {
-                direction = random.nextBoolean() ? Direction.UP : Direction.DOWN;
+                if (other.col != col) {
+                    continue;
+                }
+                // 我在它上方却要向下 → 与这辆向上的车相向
+                if (row < other.row && other.direction == Direction.UP) {
+                    allowed &= ~DIR_POSITIVE;
+                }
+                // 我在它下方却要向上 → 与这辆向下的车相向
+                if (row > other.row && other.direction == Direction.DOWN) {
+                    allowed &= ~DIR_NEGATIVE;
+                }
             }
-            int color = random.nextInt(ParkingConfig.COLOR_COUNT);
-            return new Vehicle(id, length, horizontal, direction, color, row, col);
         }
-        return null;
+        return allowed;
     }
 
     private static boolean isFree(boolean[][] occupied, int row, int col, int length, boolean horizontal) {
@@ -158,8 +236,87 @@ public final class ParkingLevelGenerator {
         }
     }
 
-    /** 把驶出顺序翻译成乘客队列：相邻同色合并成一组。 */
-    private List<PassengerGroup> buildQueue(List<Vehicle> layout, List<Integer> order) {
+    // ==================================================================
+    // 弱校验：开局可动性
+    // ==================================================================
+
+    /**
+     * 找出当前能<b>沿自己的箭头方向直线开走</b>的车（到边界的路径上无其他车阻挡）。
+     * <p>
+     * 这是取代"全局 BFS 证明可解"的弱校验：只保证开局有得走，
+     * 不保证整关无道具通关——后者由「移除 / 排序」道具兜底。
+     *
+     * @return 可开走的车辆下标（即 {@link Vehicle#id}）
+     */
+    private List<Integer> escapableVehicles(List<Vehicle> layout) {
+        boolean[][] occupied = new boolean[ParkingConfig.ROWS][ParkingConfig.COLUMNS];
+        for (Vehicle v : layout) {
+            for (int i = 0; i < v.length; i++) {
+                int r = v.horizontal ? v.row : v.row + i;
+                int c = v.horizontal ? v.col + i : v.col;
+                occupied[r][c] = true;
+            }
+        }
+        List<Integer> escapable = new ArrayList<>();
+        for (int i = 0; i < layout.size(); i++) {
+            if (canEscape(layout.get(i), occupied)) {
+                escapable.add(i);
+            }
+        }
+        return escapable;
+    }
+
+    /** 该车沿箭头方向到边界是否畅通（不含自身占格）。 */
+    private static boolean canEscape(Vehicle v, boolean[][] occupied) {
+        if (v.horizontal) {
+            int step = v.direction.dCol > 0 ? 1 : -1;
+            // 车头前方第一格：向右是 col+length，向左是 col-1
+            int first = v.direction.dCol > 0 ? v.col + v.length : v.col - 1;
+            for (int c = first; c >= 0 && c < ParkingConfig.COLUMNS; c += step) {
+                if (occupied[v.row][c]) {
+                    return false;
+                }
+            }
+            return true;
+        }
+        int step = v.direction.dRow > 0 ? 1 : -1;
+        int first = v.direction.dRow > 0 ? v.row + v.length : v.row - 1;
+        for (int r = first; r >= 0 && r < ParkingConfig.ROWS; r += step) {
+            if (occupied[r][v.col]) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    // ==================================================================
+    // 乘客队列
+    // ==================================================================
+
+    /**
+     * 构造乘客队列：<b>不再依赖解法顺序</b>（生成器已不再求全局解）。
+     * <p>
+     * 顺序策略：
+     * <ol>
+     *   <li>先放"开局能开走的车"（随机打乱）——保证开局几步一定走得通、接得上客；</li>
+     *   <li>再放其余车（随机打乱）——它们的颜色顺序不构成可解性承诺，
+     *       被堵死时由「移除 / 排序」道具处理。</li>
+     * </ol>
+     * 相邻同色合并成一组（与原来一致）。
+     */
+    private List<PassengerGroup> buildQueue(List<Vehicle> layout, List<Integer> escapable) {
+        List<Integer> order = new ArrayList<>(escapable);
+        Collections.shuffle(order, random);
+
+        List<Integer> rest = new ArrayList<>();
+        for (int i = 0; i < layout.size(); i++) {
+            if (!escapable.contains(i)) {
+                rest.add(i);
+            }
+        }
+        Collections.shuffle(rest, random);
+        order.addAll(rest);
+
         List<PassengerGroup> groups = new ArrayList<>();
         for (int id : order) {
             Vehicle v = layout.get(id);
@@ -181,298 +338,5 @@ public final class ParkingLevelGenerator {
         queue.add(new PassengerGroup(0, 2));
         queue.add(new PassengerGroup(1, 2));
         return new Level(levelIndex, layout, queue);
-    }
-
-    // ==================================================================
-    // 求解器
-    // ==================================================================
-
-    private static final class Solution {
-
-        private final List<Integer> order;
-        private final int totalMoves;
-
-        Solution(List<Integer> order, int totalMoves) {
-            this.order = order;
-            this.totalMoves = totalMoves;
-        }
-    }
-
-    private Solution solve(List<Vehicle> layout, int vehicleCount) {
-        int n = layout.size();
-        Board board = new Board(layout);
-        boolean[] gone = new boolean[n];
-        int[] anchors = new int[n];
-        for (int i = 0; i < n; i++) {
-            anchors[i] = layout.get(i).row * ParkingConfig.COLUMNS + layout.get(i).col;
-        }
-
-        List<Integer> order = new ArrayList<>();
-        int totalMoves = 0;
-        for (int step = 0; step < vehicleCount; step++) {
-            // 收集这一阶段所有"能开出去"的车，随机选一辆。
-            // 早期实现固定选最短路的那辆，结果每关都退化成"按最容易的顺序点一遍"——太简单。
-            List<Node> goals = new ArrayList<>();
-            List<Integer> indices = new ArrayList<>();
-            for (int i = 0; i < n; i++) {
-                if (gone[i]) {
-                    continue;
-                }
-                Node goal = board.extract(i, anchors, gone);
-                if (goal == null) {
-                    continue;
-                }
-                goals.add(goal);
-                indices.add(i);
-            }
-            if (goals.isEmpty()) {
-                return null;
-            }
-            int pick = random.nextInt(goals.size());
-            Node chosen = goals.get(pick);
-            int chosenIndex = indices.get(pick);
-
-            // 采用求解后的终局：后续阶段的搜索从"这辆车已经开走"的局面继续
-            anchors = chosen.anchors;
-            gone[chosenIndex] = true;
-            totalMoves += chosen.depth();
-            order.add(chosenIndex);
-        }
-        return new Solution(order, totalMoves);
-    }
-
-    /** 求解器的静态棋盘描述：车辆的静态属性与一份可变的锚点数组。 */
-    private static final class Board {
-
-        private final int size;
-        private final int[] lengths;
-        private final boolean[] horizontal;
-        private final int[] dirRow;
-        private final int[] dirCol;
-
-        Board(List<Vehicle> layout) {
-            size = layout.size();
-            lengths = new int[size];
-            horizontal = new boolean[size];
-            dirRow = new int[size];
-            dirCol = new int[size];
-            for (int i = 0; i < size; i++) {
-                Vehicle v = layout.get(i);
-                lengths[i] = v.length;
-                horizontal[i] = v.horizontal;
-                dirRow[i] = v.direction.dRow;
-                dirCol[i] = v.direction.dCol;
-            }
-        }
-
-        /**
-         * 搜索"把 target 沿箭头开出边界"的最短操作序列。
-         * <p>
-         * <b>通用化状态编码</b>：局面不再位打包，而是直接把 {@code n} 个锚点存进扁平
-         * {@code int[] anchorsStore}（节点 i 占 {@code [i*n, (i+1)*n)}），
-         * 访问集是"哈希定位 + 整段锚点比对"的开放寻址索引表。
-         * <p>
-         * 相比位打包（单 long 6bit/车、双 long 8bit/车）：
-         * <ul>
-         *   <li><b>车辆数无上限</b>——不再受 64/128 bit 宽度约束，密度可以一直往上调；</li>
-         *   <li>仍然<b>零对象分配</b>（没有 {@code Long} 装箱、没有 {@code String}、没有节点对象），
-         *       这正是压住"整机 CPU/页错误飙升、主线程被拖垮"的关键；</li>
-         *   <li>代价是每状态一次 {@code arraycopy} 与整段比对，略慢于位改写——
-         *       但生成已离线（关卡池），运行时几乎不再走这条路径。</li>
-         * </ul>
-         *
-         * @return 终局节点；放弃（超限）或无解时返回 null
-         */
-        Node extract(int target, int[] start, boolean[] gone) {
-            int n = size;
-            // 数组尺寸按"状态数预算"分配：根 + 至多 GENERATOR_MAX_BFS_STATES 个后继。
-            // 真正的预算上限是<b>入队状态数</b>（由下方 tail 守卫强制），而非出队扩展次数，
-            // 否则一个状态扩展可生成多个后继，入队总数会远超数组容量导致越界。
-            int cap = ParkingConfig.GENERATOR_MAX_BFS_STATES + 1;
-            int[] anchorsStore = new int[cap * n];  // 每个节点一段连续 n 个锚点
-            int[] depthArr = new int[cap];
-            int[] frontier = new int[cap];
-            int[] anchors = new int[n];             // 可复用的"当前局面"scratch
-            int[] next = new int[n];                // 可复用的"候选局面"scratch
-
-            // 开放寻址表：存 node+1，0 表示空槽。容量取 > 2×cap 的 2 的幂，控制装载率。
-            int tableCap = 1;
-            while (tableCap <= cap * 2) {
-                tableCap <<= 1;
-            }
-            int[] visited = new int[tableCap];
-            int mask = tableCap - 1;
-
-            // 根节点：起点局面
-            System.arraycopy(start, 0, anchorsStore, 0, n);
-            depthArr[0] = 0;
-            frontier[0] = 0;
-            visited[hash(start, n) & mask] = 1;
-            int head = 0, tail = 1;
-
-            int expanded = 0;
-            while (head < tail) {
-                if (++expanded > ParkingConfig.GENERATOR_MAX_BFS_STATES) {
-                    return null;
-                }
-                int cur = frontier[head++];
-                int base = cur * n;
-                System.arraycopy(anchorsStore, base, anchors, 0, n);
-                if (boundary(target, anchors) == 0) {
-                    int[] result = new int[n];
-                    System.arraycopy(anchorsStore, base, result, 0, n);
-                    return new Node(result, depthArr[cur]);
-                }
-                for (int i = 0; i < n; i++) {
-                    if (gone[i]) {
-                        continue;
-                    }
-                    // sign = 1 沿箭头滑到底（点击）；sign = -1 反向滑到底（拖动）
-                    for (int sign = 1; sign >= -1; sign -= 2) {
-                        int steps = maxSteps(anchors, gone, i, sign, target);
-                        if (steps == 0) {
-                            continue;
-                        }
-                        int delta = steps * sign
-                            * (dirRow[i] * ParkingConfig.COLUMNS + dirCol[i]);
-                        // 候选局面 = 父局面，只把第 i 辆的锚点平移 delta
-                        System.arraycopy(anchors, 0, next, 0, n);
-                        next[i] = anchors[i] + delta;
-
-                        int slot = hash(next, n) & mask;
-                        while (visited[slot] != 0) {
-                            int other = visited[slot] - 1;
-                            if (sameAnchors(anchorsStore, other * n, next, n)) {
-                                break; // 已访问过
-                            }
-                            slot = (slot + 1) & mask;
-                        }
-                        if (visited[slot] == 0) {
-                            if (tail >= cap) {
-                                return null; // 状态数预算耗尽，放弃本次求解
-                            }
-                            int node = tail;
-                            System.arraycopy(next, 0, anchorsStore, node * n, n);
-                            depthArr[node] = depthArr[cur] + 1;
-                            frontier[tail++] = node;
-                            visited[slot] = node + 1;
-                        }
-                    }
-                }
-            }
-            return null;
-        }
-
-        /** 局面哈希：只用于定位槽位，冲突由 {@link #sameAnchors} 兜底判等。 */
-        private static int hash(int[] anchors, int n) {
-            int h = 1;
-            for (int i = 0; i < n; i++) {
-                h = h * 31 + anchors[i];
-            }
-            return h;
-        }
-
-        /** 两段锚点是否完全相同。 */
-        private static boolean sameAnchors(int[] store, int base, int[] other, int n) {
-            for (int i = 0; i < n; i++) {
-                if (store[base + i] != other[i]) {
-                    return false;
-                }
-            }
-            return true;
-        }
-
-        private int maxSteps(int[] anchors, boolean[] gone, int index, int sign, int target) {
-            int row = anchors[index] / ParkingConfig.COLUMNS;
-            int col = anchors[index] % ParkingConfig.COLUMNS;
-            int steps = 0;
-            while (free(row + dirRow[index] * sign, col + dirCol[index] * sign,
-                lengths[index], horizontal[index], anchors, gone, index)) {
-                row += dirRow[index] * sign;
-                col += dirCol[index] * sign;
-                steps++;
-            }
-            // 非目标车不得开出边界：最多停在离边界一格的位置
-            if (index != target && sign > 0) {
-                int boundary = boundary(index, anchors);
-                steps = Math.min(steps, Math.max(0, boundary - 1));
-            }
-            return steps;
-        }
-
-        /** 该车沿箭头开到边界还需要几格。 */
-        private int boundary(int index, int[] anchors) {
-            int row = anchors[index] / ParkingConfig.COLUMNS;
-            int col = anchors[index] % ParkingConfig.COLUMNS;
-            if (horizontal[index]) {
-                return dirCol[index] < 0
-                    ? col
-                    : ParkingConfig.COLUMNS - col - lengths[index];
-            }
-            return dirRow[index] < 0
-                ? row
-                : ParkingConfig.ROWS - row - lengths[index];
-        }
-
-        private boolean free(int row, int col, int length,             boolean horizontal,
-                             int[] anchors, boolean[] gone, int self) {
-            if (row < 0 || col < 0) {
-                return false;
-            }
-            if (horizontal) {
-                if (row >= ParkingConfig.ROWS || col + length > ParkingConfig.COLUMNS) {
-                    return false;
-                }
-            } else {
-                if (col >= ParkingConfig.COLUMNS || row + length > ParkingConfig.ROWS) {
-                    return false;
-                }
-            }
-            for (int i = 0; i < size; i++) {
-                if (i == self || gone[i]) {
-                    continue;
-                }
-                int otherRow = anchors[i] / ParkingConfig.COLUMNS;
-                int otherCol = anchors[i] % ParkingConfig.COLUMNS;
-                if (overlaps(row, col, length, horizontal,
-                    otherRow, otherCol, lengths[i], this.horizontal[i])) {
-                    return false;
-                }
-            }
-            return true;
-        }
-
-        private static boolean overlaps(int row, int col, int length, boolean horizontal,
-                                        int otherRow, int otherCol, int otherLength, boolean otherHorizontal) {
-            for (int i = 0; i < length; i++) {
-                int r = horizontal ? row : row + i;
-                int c = horizontal ? col + i : col;
-                for (int j = 0; j < otherLength; j++) {
-                    int rr = otherHorizontal ? otherRow : otherRow + j;
-                    int cc = otherHorizontal ? otherCol : otherCol + j;
-                    if (r == rr && c == cc) {
-                        return true;
-                    }
-                }
-            }
-            return false;
-        }
-
-    }
-
-    /** BFS 节点：仅持有终局锚点与操作步数（步数由 BFS 数组直接记录，无需回溯父链）。 */
-    private static final class Node {
-
-        private final int[] anchors;
-        private final int depth;
-
-        Node(int[] anchors, int depth) {
-            this.anchors = anchors;
-            this.depth = depth;
-        }
-
-        int depth() {
-            return depth;
-        }
     }
 }

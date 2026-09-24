@@ -65,6 +65,9 @@
     <string name="parking_continue_negative">重新开始</string>
     <string name="parking_stuck_title">卡住了</string>
     <string name="parking_stuck_message">停车场里已经没有能动的车了</string>
+    <!-- 仍有「移除」次数时的死局文案：引导玩家用道具清路，而不是直接结束本局 -->
+    <string name="parking_stuck_message_removable">停车场里已经没有能动的车了。用「移除」拖走一辆挡路的车就能继续</string>
+    <string name="parking_stuck_remove">去移除</string>
     <string name="parking_stuck_undo">撤销一步</string>
     <string name="parking_stuck_refresh">刷新本关</string>
     <string name="parking_hint">点击车辆，它会沿箭头开到底并驶出停车场。先挪开挡路的车，让队首颜色的车先出去</string>

@@ -94,6 +94,17 @@ public final class ParkingLevelStore {
     }
 
     /**
+     * 当前配置版本下、该难度桶已缓存的条数。
+     * <p>
+     * 预热用它判断某桶还差几条（见 {@code ParkingConfig#WARMUP_PER_BUCKET}）。
+     * 注意桶是"难度档"而非关卡号：深关的关卡号不同但桶可能相同，
+     * 因此预热按桶去重后补齐，避免为同一桶重复生成。
+     */
+    public int countInBucket(int bucket) {
+        return dao.countInBucket(ParkingConfig.configVersion(), bucket);
+    }
+
+    /**
      * 把在线生成的关卡写回池。
      * <p>
      * 这既是<b>自愈</b>（池空时补齐，下一次同桶取关即可命中），

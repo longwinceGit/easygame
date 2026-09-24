@@ -15,12 +15,15 @@ import com.template.app.data.ParkingLevelStore;
 import com.template.app.data.model.GameRecord;
 import com.template.app.game.parking.engine.BoardStep;
 import com.template.app.game.parking.engine.MoveResult;
+import com.template.app.game.parking.engine.ParkingConfig;
 import com.template.app.game.parking.engine.ParkingEngine;
 import com.template.app.game.parking.engine.ParkingLevelGenerator;
 import com.template.app.game.parking.model.Level;
 import com.template.app.util.Constants;
 
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
@@ -69,6 +72,14 @@ public class ParkingViewModel extends AndroidViewModel {
     private final ExecutorService generatorExecutor =
             Executors.newSingleThreadExecutor(r -> new Thread(r, "parking-level-gen"));
 
+    /**
+     * 预热线程池：<b>刻意与 {@link #generatorExecutor} 分开</b>。
+     * 预热是"攒库存"的慢活（一次补齐若干关），若共用那条单线程队列，
+     * 玩家点「刷新」会排在预热任务后面白白等待——正是要消除的卡顿。
+     */
+    private final ExecutorService warmupExecutor =
+            Executors.newSingleThreadExecutor(r -> new Thread(r, "parking-level-warmup"));
+
     private final MutableLiveData<Integer> score = new MutableLiveData<>(0);
     private final MutableLiveData<Integer> level = new MutableLiveData<>(1);
     private final MutableLiveData<Integer> passengersLeft = new MutableLiveData<>(0);
@@ -115,6 +126,7 @@ public class ParkingViewModel extends AndroidViewModel {
     @Override
     protected void onCleared() {
         generatorExecutor.shutdown();
+        warmupExecutor.shutdown();
         super.onCleared();
     }
 
@@ -306,6 +318,8 @@ public class ParkingViewModel extends AndroidViewModel {
         // 进度持久化：把当前关卡 / 累计分 / 累计接客数写入存档，
         // 退到大厅只是「暂停」，下次进入可「继续」。
         persistProgress(engine.getLevelIndex(), engine.getScore(), engine.getSessionServed());
+        // 玩家已经在玩第 N 关了，趁现在把后续几关的池子填满（纯后台，不影响当前局）。
+        warmUp(engine.getLevelIndex());
     }
 
     /** 进入下一关。 */
@@ -316,6 +330,32 @@ public class ParkingViewModel extends AndroidViewModel {
     /** 刷新：重新随机生成本关（关卡号不变，本关进度清零）。 */
     public void refreshLevel() {
         requestLevel(engine.getLevelIndex());
+    }
+
+    /**
+     * 后台预生成后续若干关并入库，消除"首次进关 / 点刷新"时的等待。
+     * <p>
+     * 关卡按<b>难度桶</b>缓存（{@link ParkingConfig#bucketOf}），深关的关卡号不同但桶会重合，
+     * 因此先按桶去重、每桶只补齐到 {@link ParkingConfig#WARMUP_PER_BUCKET} 条，
+     * 避免为同一个桶重复生成。全程在后台低优先级线程执行，与玩家当前关卡互不干扰。
+     */
+    public void warmUp(int fromLevelIndex) {
+        warmupExecutor.execute(() -> {
+            android.os.Process.setThreadPriority(android.os.Process.THREAD_PRIORITY_BACKGROUND);
+            ParkingLevelStore store = levelStore();
+            // bucket -> 该桶的代表关卡号（生成时要按这个难度取车辆数）
+            Map<Integer, Integer> buckets = new LinkedHashMap<>();
+            for (int i = 0; i < ParkingConfig.WARMUP_LEVEL_COUNT; i++) {
+                int index = fromLevelIndex + i;
+                buckets.putIfAbsent(ParkingConfig.bucketOf(index), index);
+            }
+            for (Map.Entry<Integer, Integer> entry : buckets.entrySet()) {
+                int need = ParkingConfig.WARMUP_PER_BUCKET - store.countInBucket(entry.getKey());
+                for (int k = 0; k < need; k++) {
+                    store.store(generator.generate(entry.getValue()));
+                }
+            }
+        });
     }
 
     public void undo() {
