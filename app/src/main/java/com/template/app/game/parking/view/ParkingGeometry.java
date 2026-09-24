@@ -25,6 +25,13 @@ class ParkingGeometry {
      */
     static final float MIN_CELL_DP = 22f;
 
+    /**
+     * 停车场整体缩放系数：格子按可用空间算出后再乘以它，让棋盘四周留出呼吸空间，
+     * 避免在小屏（如 Nova 13）上倾斜棋盘的外接盒一路顶到道具栏。
+     * 只缩停车场，不缩队列 / 接客区 / 马路。
+     */
+    static final float LOT_SCALE = 0.95f;
+
     static final float QUEUE_HEIGHT_DP = 46f;
     static final float PICKUP_HEIGHT_DP = 62f;
     static final float ROAD_HEIGHT_DP = 44f;
@@ -95,7 +102,7 @@ class ParkingGeometry {
         // 旋转后外接盒（以格数为单位）：W·cos + H·sin / W·sin + H·cos
         float spanWidth = ParkingConfig.COLUMNS * cos + ParkingConfig.ROWS * sin;
         float spanHeight = ParkingConfig.COLUMNS * sin + ParkingConfig.ROWS * cos;
-        cell = Math.min(contentWidth / spanWidth, availableHeight / spanHeight);
+        cell = Math.min(contentWidth / spanWidth, availableHeight / spanHeight) * LOT_SCALE;
         float minCell = MIN_CELL_DP * density;
         if (cell < minCell) {
             cell = minCell;

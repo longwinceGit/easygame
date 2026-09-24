@@ -196,6 +196,7 @@ class ParkingRenderer {
         drawRoad(canvas);
         drawGround(canvas);
         drawVehicles(canvas, engine, anim, removeMode);
+        drawMovingVehicle(canvas, anim, now);
         drawExitingVehicle(canvas, anim, now);
         drawBoardingCar(canvas, anim, now);
         drawPopup(canvas, anim, now);
@@ -486,11 +487,40 @@ class ParkingRenderer {
     }
 
     /**
+     * 棋盘内移动动画：车在旋转坐标系里从起点插到终点，绘制逻辑与静态车完全一致，
+     * 只是用了插值后的 (row, col)。不画它会导致移动途中整车"消失一下再出现"。
+     */
+    private void drawMovingVehicle(Canvas canvas, ParkingAnimator anim, long now) {
+        if (!anim.isMoveAnimating(now)) {
+            return;
+        }
+        Vehicle v = anim.moveVehicle;
+        if (v == null) {
+            return;
+        }
+        // 与 drawVehicles 同样的插值：棋盘坐标系内线性插值，再随棋盘一起旋转。
+        float t = Math.min(1f, (now - anim.moveStart) / (float) anim.moveDuration);
+        float eased = easeInOutCubic(t);
+        float row = anim.fromRow + (anim.toRow - anim.fromRow) * eased;
+        float col = anim.fromCol + (anim.toCol - anim.fromCol) * eased;
+        geometry.vehicleScreenCenter(row, col, v.length, v.horizontal);
+        float cx = geometry.tmpX;
+        float cy = geometry.tmpY;
+        float vw = geometry.vehicleWidth(v.length, v.horizontal);
+        float vh = geometry.vehicleHeight(v.length, v.horizontal);
+        drawCarShape(canvas, v.direction, v.colorIndex, cx, cy,
+            ParkingGeometry.ROTATION_DEGREES, 1f, 1f, vw, vh);
+        if (!v.isFull()) {
+            drawSeatBadge(canvas, v.remainingCapacity(), cx, cy, vw, vh,
+                ParkingGeometry.ROTATION_DEGREES);
+        }
+    }
+
+    /**
      * 驶出动画：车先沿车头方向冲出场地（途经点），再拐进接客位，
      * 同时车身从棋盘倾角转正——"车开走了"的关键观感。
      */
-    private void drawExitingVehicle(Canvas canvas, ParkingAnimator anim, long now) {
-        if (anim.exitVehicle == null) {
+    private void drawExitingVehicle(Canvas canvas, ParkingAnimator anim, long now) {        if (anim.exitVehicle == null) {
             return;
         }
         float progress = Math.min(1f, (now - anim.exitStart) / (float) ParkingAnimator.EXIT_DURATION_MS);

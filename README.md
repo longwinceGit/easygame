@@ -214,9 +214,10 @@ androidTemplete/
     │   └── parking/                              # 【游戏 2】挪车消消消，与 tetris 平级、零依赖
     │       ├── model/                            #   纯 Java：车辆、方向、乘客组、关卡
     │       ├── engine/                           #   纯 Java：状态机、移动/驶出/接客、撤销、
-    │       │                                     #   关卡生成 + BFS 可解性证明
-    │       ├── view/                             #   倾斜棋盘渲染 + 手势 + 驶出动画
-    │       ├── ui/                               #   Fragment + ViewModel
+    │       │                                     #   关卡生成 + BFS 可解性证明、计分（每乘客
+    │       │                                     #   +10 / 通关+100×关卡 / 连击+50×(n−1)）
+    │       ├── view/                             #   倾斜棋盘渲染 + 手势 + 驶出动画 + 连击浮字
+    │       ├── ui/                               #   Fragment + ViewModel（含连击浮字触发）
     │       └── ParkingGamePlugin.java            #   注册入口
     │
     ├── data/                                     # 【基础设施】Room 成绩存档

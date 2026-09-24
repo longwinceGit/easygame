@@ -26,8 +26,8 @@ public final class ParkingConfig {
     /** 停车场行数。 */
     public static final int ROWS = 10;
 
-    /** 接客区车位数——全局难度总闸。 */
-    public static final int PICKUP_SLOTS = 4;
+    /** 接客区车位数——全局难度总闸。参考图为一排 7 个虚线车位，本作取 6（兼顾窄屏车位宽度）。 */
+    public static final int PICKUP_SLOTS = 6;
 
     /** 乘客颜色数，必须与 parking_passenger_colors 数组长度一致。 */
     public static final int COLOR_COUNT = 8;
@@ -45,10 +45,13 @@ public final class ParkingConfig {
      * 每格载客数：载客量 = 车身长度 × 本值。
      * <p>
      * <b>与 {@code Vehicle#capacity()} 是同一条规则的两处实现</b>——
-     * model 层不依赖 engine 层，故 {@code Vehicle.capacity()} 仍是 {@code length}，
-     * 等价于本值为 1。若要把本值改成 ≠1，必须同步改 {@code Vehicle.capacity()}。
+     * model 层不依赖 engine 层，故 {@code Vehicle.capacity()} 硬编码为 {@code length × 2}。
+     * <b>若要改本值，必须同步改 {@code Vehicle.capacity()}</b>。
+     * <p>
+     * 参考图满场 50+ 辆、每车 2~3 人；本作受"生成时证明可解"约束车辆上限约 24，
+     * 故把每格载客翻倍到 2（小汽车 4 座、巴士 6 座），24 辆 ≈ 120 人，接近参考图观感。
      */
-    public static final int PASSENGERS_PER_CELL = 1;
+    public static final int PASSENGERS_PER_CELL = 2;
 
     /** 载客量：车身长度 × {@link #PASSENGERS_PER_CELL}。 */
     public static int capacityOf(int length) {
@@ -82,16 +85,15 @@ public final class ParkingConfig {
     public static final int SCORE_COMBO_PER_EXTRA = 50;
 
     /** 关卡生成：布局重试上限。车多了、棋盘大了，重试成本高，但太多会让最坏耗时失控。 */
-    public static final int GENERATOR_MAX_ATTEMPTS = 14;
+    public static final int GENERATOR_MAX_ATTEMPTS = 20;
 
     /**
      * 关卡生成：单次 BFS 访问状态上限。
      * <p>
-     * 5000 对本作目标密度（封顶 {@link #MAX_VEHICLES} 辆）实测足够：20 辆时仍 100% 满车。
-     * 超过约 22 辆后车容易被埋住、这个预算展不开，表现为"大量降车"——
-     * 届时才需要放宽（代价是生成显著变慢）。
+     * 密度提到 {@link #MAX_FILL_RATIO} = 0.60 后封顶 24 辆，5000 预算展不开
+     * （原标定在 20 辆 / 0.50 密度下），放宽到 12000；代价是单关生成耗时上升。
      */
-    public static final int GENERATOR_MAX_BFS_STATES = 5000;
+    public static final int GENERATOR_MAX_BFS_STATES = 12000;
 
     /** 小汽车长度（占格数）。 */
     public static final int LENGTH_MIN = 2;
@@ -115,7 +117,7 @@ public final class ParkingConfig {
      * 完全由实测决定——密度太高时 BFS 没有腾挪空间、求不出解，生成就会失败。
      * 取值经 {@code BoardCheck} 密度扫描标定：满车率达标、保底率为 0、耗时可接受。
      */
-    public static final double MAX_FILL_RATIO = 0.50;
+    public static final double MAX_FILL_RATIO = 0.60;
 
     /**
      * 单关最多车辆数 = 棋盘容量 × 目标占用率 ÷ 每车平均占格。
@@ -127,19 +129,19 @@ public final class ParkingConfig {
         (int) (BOARD_CELLS * MAX_FILL_RATIO / AVG_CELLS_PER_VEHICLE));
 
     /** 首关车辆数。 */
-    public static final int START_VEHICLES = 8;
+    public static final int START_VEHICLES = 10;
 
     /** 每关递增车辆数。 */
-    public static final int VEHICLES_PER_LEVEL = 1;
+    public static final int VEHICLES_PER_LEVEL = 2;
 
     /**
-     * 车辆数量：<b>L1 = {@link #START_VEHICLES}，之后每关 +1，到 {@link #MAX_VEHICLES} 封顶</b>。
+     * 车辆数量：<b>L1 = {@link #START_VEHICLES}，之后每关 +2，到 {@link #MAX_VEHICLES} 封顶</b>。
      * <p>
      * 本作所有车都要接客离场，**没有"只挡路不用管"的车**——
      * 车越多，挡路的越多，要接的乘客也越多，难度随关卡单调上升。
      * <p>
-     * 封顶值由密度实测标定（10×10）：20 辆时仍 100% 满车、单次约 5s 内完成，
-     * 故上限取 20。本作难度曲线为 L1=8、之后每关 +1、L13 起恒定 20。
+     * 封顶值由密度实测标定：0.60 占用率下 24 辆，BFS 预算同步放宽（见
+     * {@link #GENERATOR_MAX_BFS_STATES}）。难度曲线为 L1=10、每关 +2、L8 起恒定 24。
      */
     public static int vehicleCount(int levelIndex) {
         return clamp(START_VEHICLES + (levelIndex - 1) * VEHICLES_PER_LEVEL, 5, MAX_VEHICLES);
