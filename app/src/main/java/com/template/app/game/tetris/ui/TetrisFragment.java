@@ -88,16 +88,37 @@ public class TetrisFragment extends Fragment {
         }
         TetrisEngine.State state = viewModel.getState().getValue();
         if (state == null || state == TetrisEngine.State.READY) {
-            viewModel.start();
+            // 与挪车一致：存在未完成局时先问「继续 / 重新开始」，否则直接开新局
+            if (viewModel.hasResumableSession()) {
+                showContinueDialog();
+            } else {
+                viewModel.start();
+            }
         } else if (state == TetrisEngine.State.PAUSED) {
             viewModel.resume();
         }
+    }
+
+    /** 再次进入时弹出：继续（从存档接续）或重新开始（清空棋盘）。 */
+    private void showContinueDialog() {
+        int score = viewModel.getSavedScore();
+        new MaterialAlertDialogBuilder(requireContext())
+            .setTitle(R.string.tetris_continue_title)
+            .setMessage(getString(R.string.tetris_continue_message, score))
+            .setCancelable(false)
+            .setPositiveButton(R.string.tetris_continue_positive,
+                (dialog, which) -> viewModel.continueRun())
+            .setNegativeButton(R.string.tetris_continue_negative,
+                (dialog, which) -> viewModel.abandonAndRestart())
+            .show();
     }
 
     @Override
     public void onPause() {
         if (viewModel != null) {
             viewModel.pause();
+            // 退出只是暂停：落盘当前局面，下次进入可继续
+            viewModel.persistProgress();
         }
         super.onPause();
     }

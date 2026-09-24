@@ -257,6 +257,93 @@ public final class TetrisEngine {
     }
 
     // ==================================================================
+    // 会话存档（退出后继续）
+    // ==================================================================
+
+    /**
+     * 一局进行中的快照，用于"退出只是暂停、下次进来可继续"（对齐挪车的进度持久化）。
+     * <p>
+     * 只存<b>可静态描述的数据</b>：棋盘格子、托盘方块（类型 + 旋转态）、分数类字段。
+     * 7-bag 的剩余序列刻意不存——继续后从新的一袋开始，对可玩性无影响。
+     * <p>
+     * <b>纯 Java，不依赖 android.*（ADR-003）。</b>
+     */
+    public static final class SessionSnapshot {
+
+        /** 棋盘格子：0 = 空，1..7 = 方块调色板索引 + 1。 */
+        public final int[][] cells;
+
+        /** 托盘每槽的 {@link TetrominoType} 序号；-1 = 该槽为空。 */
+        public final int[] trayTypes;
+
+        /** 托盘每槽的旋转态，与 {@link #trayTypes} 一一对应。 */
+        public final int[] trayRotations;
+
+        public final int score;
+        public final int lines;
+        public final int level;
+        public final int combo;
+
+        public SessionSnapshot(int[][] cells, int[] trayTypes, int[] trayRotations,
+                               int score, int lines, int level, int combo) {
+            this.cells = cells;
+            this.trayTypes = trayTypes;
+            this.trayRotations = trayRotations;
+            this.score = score;
+            this.lines = lines;
+            this.level = level;
+            this.combo = combo;
+        }
+    }
+
+    /** 导出当前局面快照。棋盘会<b>深拷贝</b>，快照与引擎后续状态互不影响。 */
+    public SessionSnapshot snapshot() {
+        int[][] src = board.cells();
+        int[][] copy = new int[src.length][];
+        for (int r = 0; r < src.length; r++) {
+            copy[r] = src[r].clone();
+        }
+        int[] types = new int[tray.length];
+        int[] rotations = new int[tray.length];
+        for (int i = 0; i < tray.length; i++) {
+            Tetromino piece = tray[i];
+            types[i] = piece == null ? -1 : piece.type().ordinal();
+            rotations[i] = piece == null ? 0 : piece.rotation();
+        }
+        return new SessionSnapshot(copy, types, rotations, score, lines, level, combo);
+    }
+
+    /**
+     * 从快照恢复局面（继续上次未完成的局）。
+     * <p>
+     * 非法数据（棋盘尺寸不符、类型越界）一律返回 {@code false}，由调用方开新局兜底。
+     * 空槽会被补满——存档若来自旧版本可能缺槽。
+     *
+     * @return 是否恢复成功
+     */
+    public boolean restore(SessionSnapshot snapshot) {
+        if (snapshot == null || !board.restore(snapshot.cells)) {
+            return false;
+        }
+        for (int i = 0; i < tray.length; i++) {
+            int ordinal = i < snapshot.trayTypes.length ? snapshot.trayTypes[i] : -1;
+            if (ordinal < 0 || ordinal >= TetrominoType.TYPES.length) {
+                tray[i] = null;
+                continue;
+            }
+            int rotation = i < snapshot.trayRotations.length ? snapshot.trayRotations[i] : 0;
+            tray[i] = new Tetromino(TetrominoType.TYPES[ordinal], rotation);
+        }
+        refillTray();
+        score = snapshot.score;
+        lines = snapshot.lines;
+        level = Math.max(1, snapshot.level);
+        combo = Math.max(0, snapshot.combo);
+        state = State.RUNNING;
+        return true;
+    }
+
+    // ==================================================================
     // 内部实现
     // ==================================================================
 

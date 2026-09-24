@@ -42,6 +42,29 @@ public final class Board {
         return cells;
     }
 
+    /**
+     * 用外部格子数据覆盖棋盘，供"退出后继续"从存档恢复。
+     * <p>
+     * <b>尺寸不符时一律拒绝</b>：存档可能来自棋盘尺寸不同的版本（如 {@code BOARD_WIDTH} 变更），
+     * 此时丢弃存档、由调用方开新局，比画出错位棋盘或崩溃好。
+     *
+     * @return 是否恢复成功
+     */
+    public boolean restore(int[][] source) {
+        if (source == null || source.length != height) {
+            return false;
+        }
+        for (int r = 0; r < height; r++) {
+            if (source[r] == null || source[r].length != width) {
+                return false;
+            }
+        }
+        for (int r = 0; r < height; r++) {
+            System.arraycopy(source[r], 0, cells[r], 0, width);
+        }
+        return true;
+    }
+
     /** 清空棋盘。 */
     public void clear() {
         for (int r = 0; r < height; r++) {

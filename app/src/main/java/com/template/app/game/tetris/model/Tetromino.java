@@ -15,6 +15,17 @@ public final class Tetromino {
         this.rotation = 0;
     }
 
+    /**
+     * 以<b>指定旋转态</b>构造，供"退出后继续"从存档恢复使用。
+     * <p>
+     * 常规流程只用 {@link #Tetromino(TetrominoType)}（rotation 从 0 开始）；
+     * 存档必须保留玩家已经转过的角度，否则继续时方块姿态会变。
+     */
+    public Tetromino(TetrominoType type, int rotation) {
+        this.type = type;
+        this.rotation = rotation & 3;
+    }
+
     public TetrominoType type() {
         return type;
     }
