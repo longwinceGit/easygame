@@ -100,6 +100,13 @@
     <string name="records_best_empty">还没有成绩记录</string>
     <string name="records_recent_empty">还没有对局记录，去玩一局吧</string>
     <string name="records_play_count">%1$d 局</string>
-    <string name="records_meta">%1$d 行 · %2$s</string>
+    <!--
+      战绩行的元信息。GameRecord 是一张跨游戏共用的表，lines / level 两列语义不同，
+      必须按游戏各用一套模板（见 RecordsFragment#buildMeta），
+      否则挪车的「接客人数」会被当成拖拽方块的「消行数」显示。
+      %1$d = lines（乘客数 / 行数），%2$s = 相对时间，%3$d = level（关卡号 / 等级）
+    -->
+    <string name="records_meta_parking">%1$d 位乘客 · 第 %3$d 关 · %2$s</string>
+    <string name="records_meta_tetris">%1$d 行 · 等级 %3$d · %2$s</string>
 
 </resources>

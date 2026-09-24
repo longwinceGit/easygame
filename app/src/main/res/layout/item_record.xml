@@ -39,7 +39,7 @@
         android:layout_height="wrap_content"
         android:layout_marginTop="@dimen/spacing_sm"
         android:textAppearance="@style/TextAppearance.Template.Caption"
-        tools:text="12 行 · 3 分钟前" />
+        tools:text="24 位乘客 · 第 8 关 · 3 分钟前" />
 
     <View
         android:layout_width="match_parent"

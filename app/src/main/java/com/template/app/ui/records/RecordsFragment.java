@@ -19,6 +19,7 @@ import com.template.app.data.model.GameBest;
 import com.template.app.data.model.GameRecord;
 import com.template.app.game.core.GamePlugin;
 import com.template.app.game.core.GameRegistry;
+import com.template.app.util.Constants;
 
 import java.util.List;
 
@@ -84,12 +85,29 @@ public class RecordsFragment extends Fragment {
             ItemRecordBinding item = ItemRecordBinding.inflate(inflater, binding.containerRecent, false);
             item.tvGameName.setText(gameName(record.getGameId()));
             item.tvScore.setText(String.valueOf(record.getScore()));
-            item.tvMeta.setText(getString(R.string.records_meta,
-                record.getLines(),
-                DateUtils.getRelativeTimeSpanString(record.getPlayedAt(), now,
-                    DateUtils.MINUTE_IN_MILLIS, DateUtils.FORMAT_ABBREV_RELATIVE)));
+            item.tvMeta.setText(buildMeta(record, now));
             binding.containerRecent.addView(item.getRoot());
         }
+    }
+
+    /**
+     * 战绩行的元信息：<b>必须按游戏分别取模板</b>。
+     * <p>
+     * {@link GameRecord} 是一张跨游戏共用的表，{@code lines} / {@code level} 两列
+     * 在不同游戏下语义不同：
+     * <ul>
+     *   <li>挪车消消消：{@code lines} = <b>接客人数</b>，{@code level} = <b>关卡号</b></li>
+     *   <li>拖拽方块：{@code lines} = <b>消行数</b>，{@code level} = <b>等级</b></li>
+     * </ul>
+     * 若共用一套模板，挪车的接客数会被显示成"N 行"，拖拽方块的等级也会丢掉。
+     */
+    private String buildMeta(GameRecord record, long now) {
+        CharSequence when = DateUtils.getRelativeTimeSpanString(record.getPlayedAt(), now,
+            DateUtils.MINUTE_IN_MILLIS, DateUtils.FORMAT_ABBREV_RELATIVE);
+        int template = Constants.GAME_ID_PARKING.equals(record.getGameId())
+            ? R.string.records_meta_parking
+            : R.string.records_meta_tetris;
+        return getString(template, record.getLines(), when, record.getLevel());
     }
 
     /** 由 gameId 解析出游戏名称；未注册的游戏直接回退显示 ID。 */
